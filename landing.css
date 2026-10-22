@@ -66,7 +66,7 @@ body {
 .nav-links a {
     position: relative;
     padding: 8px 0;
-    color: #e4e4e4;
+    color: #f9f6f6;
     font-size: 16px;
     font-weight: 530;
     text-decoration: none;
@@ -84,16 +84,16 @@ body {
     content: "";
     left: 0;
     bottom: 1px;
-    width: 25px;
+    width: 41px;
     height: 2px;
     border-radius: 5px;
-    background: #ffffff;
+    background: #fffcfc;
 }
 
 .nav-actions {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 14px;
     margin-left: auto;
     margin-right: 10px;
 
@@ -113,16 +113,17 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: px;
     min-height: 29px;
     padding: 0 19px;
     border: 1px solid transparent;
-    border-radius: 11px;
+    border-radius: 7px;
     color: #ffffff;
     font-size: 11px;
     font-weight: 700;
     text-decoration: none;
     transition: background 0.2s ease, transform 0.2s ease;
+    
 }
 
 .button:hover {
@@ -130,63 +131,65 @@ body {
 }
 
 .button-login {
-    min-width: 76px;
+    min-width: 70px;
     border-color: #f6f0f0;
-    background: #0f187e6f;
-    padding-right:50px;
-    padding-left: 50px;
+    background: #242e9e6f;
+    padding-right:35px;
+    padding-left: 35px;
     padding-top: 10px;
     padding-bottom:10px;
+    
 
 }
 
 .button-login:hover {
-    background: #20265b;
+    background: #0f133b;
 }
 
 .button-register,
 
 .button-primary {
-    background: #3548d3;
+    background: #2031b1;
 }
 
 .button-register {
     min-width: 75px;
-    padding-right:35px;
-    padding-left: 35px;
+    padding-right:25px;
+    padding-left: 25px;
     padding-top: 10px;
     padding-bottom:10px;
 }
 
 .button-register:hover,
 .button-primary:hover {
-    background: #4b5deb;
+    background: #14193d;
 }
 
 .hero {
     display: grid;
     grid-template-columns: minmax(350px, 1fr) minmax(280px, 1fr);
     align-items: start;
-    gap: 25px;
-    padding: 103px 8px 0;
+    gap: 5x;
+    padding: 190px 8px 0;
 }
 
 .hero-copy {
-    max-width: 430px;
+    max-width: 100%;
 }
 
 .eyebrow {
     margin-bottom: 5px;
     color: #f0f0f0;
-    font-size: 15px;
+    font-size: 20px;
     font-weight: 700;
     letter-spacing: 0.1px;
     padding-bottom: 10px;
-}
+    
+}   
 
 h1 {
     margin-bottom: 14px;
-    font-size: clamp(53px, 4.2vw, 44px);
+    font-size: clamp(68px, 4.2vw, 44px);
     font-weight: 800;
     letter-spacing: -1.8px;
     line-height: 1.18;
@@ -202,16 +205,16 @@ h1 {
 
 .hero-buttons {
     display: flex;
-    gap: 11px;
+    gap: 25px;
     margin: 38px 0 0 13px;
     
 }
 
 .hero-buttons .button {
     font-weight: 30px;
-    font-size: 11px;
-    padding-right:35px;
-    padding-left: 35px;
+    font-size: 15px;
+    padding-right:45px;
+    padding-left: 45px;
     padding-top: 10px;
     padding-bottom:10px;
 }
@@ -220,19 +223,32 @@ h1 {
 .button-primary {
     min-width: 126px;
     border-color: #0016df;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14) inset;
     padding-right:35px;
     padding-left: 35px;
-    padding-top: 10px;
+    padding-top: 19px;
     padding-bottom:10px;
-
+    box-shadow: 1px 5px 13px rgb(0, 0, 0);
+    background: rgb(61, 46, 174);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(2px);
+    border: solid #ffffff53 1px;
+    border-radius: 7px;
+    padding: 20px;
+    transform: translateX(20px);
 }
 
 .button-secondary {
     min-width: 126px;
     border-color: #fafafa;
-    background: linear-gradient(#14368a, #1a15601e);
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+    box-shadow: 1px 5px 13px rgb(0, 0, 0);
+    background: rgba(41, 27, 143, 0);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(2px);
+    border: solid #ffffff9a 1px;
+    border-radius: 7px;
+    padding: 20px;
+    transform: translateX(20px);
     
 }
 
@@ -244,41 +260,54 @@ h1 {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 31px;
+    gap: -20px;
     padding-top: -1px;
-    padding-left: 0;
+    padding-left: 200px;
+  
 }
 
 .enrollment-card {
     display: flex;
     align-items: center;
     gap: 12px;
-    width: 253px;
-    min-height: 84px;
+    width: 350px;
+    min-height: 120px;
     padding: 20px 15px;
-    border: 1px solid #f5f3f3;
-    border-radius: 6px;
-    background: linear-gradient(170deg, #fbfbff50, #ffffff3c);
-    box-shadow: 0 1px 0 #bdbdbd, 0 0 200px rgba(52, 15, 15, 0.932);
-    padding-left: 100px;
+    box-shadow: 1px 5px 13px rgb(0, 0, 0);
+    background: rgba(41, 27, 143, 0);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(2px);
+    border: solid #ffffff 1px;
+    border-radius: 14px;
+    padding: 20px; 
+
 }
 
+
 .calendar-icon {
+    position: fixed;
     display: grid;
     flex: 0 0 51px;
     place-items: center;
-    width: 51px;
-    height: 49px;
+    width: 80px;
+    height: 80px;
     border: 1px solid #343d87;
     border-radius: 7px;
     color: #ffffff;
-    background: linear-gradient(145deg, #303c91, #171b58);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    background: linear-gradient(145deg, #6475f229, #4d58f2);
+    box-shadow: 1px 5px 13px rgb(0, 0, 0);
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+    border: solid #ffffff00 1px;
+    border-radius: 14px;
+    padding: 20px; 
 }
 
 .calendar-icon svg {
-    width: 30px;
-    height: 30px;
+    width: 60px;
+    height: 60px;
+    position:fixed;
+    
 }
 
 .date-copy {
@@ -289,15 +318,20 @@ h1 {
 .date-copy p {
     margin-bottom: 5px;
     color: #eeeeee;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
     white-space: nowrap;
+    padding-left: 100px;
+    transform: translateY(-10px); 
+
 }
 
 .date-copy h2 {
-    font-size: 15px;
+    font-size: 22px;
     font-weight: 700;
     white-space: nowrap;
+    padding-left: 100px; 
+    transform: translateY(-10px); 
 }
 
 .arrow-circle,
@@ -309,40 +343,49 @@ h1 {
     color: #ffffff;
     background: #3b50d2;
     font-weight: 700;
+    padding-left: 2px;
 }
 
 .arrow-circle {
-    width: 19px;
-    height: 19px;
+    width: 30px;
+    height: 30px;
     font-size: 13px;
+    padding-left: 10px;
 }
 
 .schedule-card {
     display: flex;
     align-items: center;
     gap: 9px;
-    min-width: 121px;
+    min-width: 200px;
     min-height: 45px;
-    margin-left: 125px;
-    padding: 8px 10px;
-    border: 1px solid #666666;
-    border-radius: 6px;
-    background: linear-gradient(135deg, #101010, #030303);
-    box-shadow: 0 1px 0 #bdbdbd;
+    margin-left: 150px;
+    box-shadow: 1px 5px 13px rgb(0, 0, 0);
+    background: rgba(41, 27, 143, 0);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(2px);
+    border: solid #ffffff9a 1px;
+    border-radius: 7px;
+    padding: 20px; 
+    transform: translateY(40px); 
+
+
 }
 
 .check-circle {
-    width: 23px;
-    height: 23px;
+    width: 30px;
+    height: 30px;
     font-size: 15px;
-}
+}   
 
 .schedule-card p {
     color: #eeeeee;
-    font-size: 9px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 600;
     line-height: 1.35;
-    white-space: nowrap;
+    transform: translateX(10px); 
+    text-align:justify;
+
 }
 
 @media (min-width: 1100px) {
