@@ -545,6 +545,10 @@ function withSidebar(content) {
       <aside class="side" id="sidebar">
         <div class="logo">Enroll<span>Ease</span></div>
         ${links}
+        <div class="sidebar-cloud-status" id="misCloudStatus" title="CTU MIS Central Database">
+          <span class="cloud-dot online pulse"></span>
+          <span class="cloud-text">CTU MIS: Online</span>
+        </div>
         <a href="#" id="sidebarLogout">🚪 Logout</a>
       </aside>
       <main class="main">
@@ -597,7 +601,7 @@ PAGES.login = {
     </form></div>`,
 
   setup() {
-    select('#loginForm').onsubmit = event => {
+    select('#loginForm').onsubmit = async event => {
       event.preventDefault();
       clearErrors();
       const typedId = select('#loginId').value.trim();
@@ -608,8 +612,31 @@ PAGES.login = {
       if (!typedPassword) valid = showError('loginPassword', 'Enter your password.');
       if (!valid) return;
 
-      const user = allUsers().find(u =>
+      let user = allUsers().find(u =>
         u.email.toLowerCase() === typedId.toLowerCase() || u.sid === typedId);
+
+      // Query CTU Central MIS Cloud Database if account not in local storage yet
+      if (!user && window.CtuMis) {
+        try {
+          const master = await window.CtuMis.getStudent(typedId);
+          if (master) {
+            user = {
+              name: master.full_name,
+              sid: master.student_id,
+              email: master.email || `${master.student_id}@student.ctu.edu.ph`,
+              password: 'demo1234',
+              contact: master.contact || '0912 345 6789',
+              program: master.program_code === 'BSCS' ? 'BS Computer Science' : 'BS Information Technology',
+              year: `${master.year_level === 1 ? '1st' : (master.year_level === 2 ? '2nd' : '3rd')} Year`,
+              section: master.section,
+              blockName: master.block_name,
+              status: master.academic_status || 'Officially Enrolled'
+            };
+            saveData('ee_users', [...allUsers(), user]);
+          }
+        } catch (e) {}
+      }
+
       if (!user) return showError('loginId', 'No account found for that email or student ID.');
       if (user.password !== typedPassword) return showError('loginPassword', 'Incorrect password. Try again.');
 
@@ -891,6 +918,11 @@ PAGES['appointment-summary'] = {
         syncToAdminDashboard(appointment, user);
       }
 
+      // Sync appointment to EnrollEase Supabase Cloud Database
+      if (window.EnrollEaseCloud) {
+        window.EnrollEaseCloud.saveAppointment(appointment);
+      }
+
       sessionStorage.removeItem('ee_draft');
       goTo('confirmation');
     };
@@ -1138,7 +1170,7 @@ PAGES.enrollment = {
             <div class="ctu-info-item"><span class="lbl">ID Number :</span> <span class="val font-mono">${escapeHtml(user.sid)}</span></div>
             <div class="ctu-info-item"><span class="lbl">Name :</span> <span class="val">${escapeHtml(user.name.toUpperCase())}</span></div>
             <div class="ctu-info-item"><span class="val">${escapeHtml(user.program && user.program.includes('IT') ? 'BSIT 2' : (user.year || 'BSIT 2'))}</span></div>
-            <div class="ctu-block-name">${escapeHtml(blockName)}</div>
+            <div class="ctu-block-name" id="ctuBlockDisplay">${escapeHtml(blockName)}</div>
           </div>
 
           <!-- Dual Column Tables: Subjects on Left (73%), Fees on Right (27%) -->
@@ -1157,7 +1189,7 @@ PAGES.enrollment = {
                     <th>ROOM</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="ctuSubjectsTbody">
                   ${ctuSubjects.map(s => `
                     <tr>
                       <td class="center ctu-sub-code">${escapeHtml(s.section)}</td>
@@ -1173,7 +1205,7 @@ PAGES.enrollment = {
                 <tfoot>
                   <tr class="ctu-table-total-row">
                     <td colspan="3" class="right">Total Units</td>
-                    <td class="center font-mono">28.00</td>
+                    <td class="center font-mono" id="ctuTotalUnits">28.00</td>
                     <td colspan="3"></td>
                   </tr>
                 </tfoot>
@@ -1189,7 +1221,7 @@ PAGES.enrollment = {
                     <th class="right">AMOUNT</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="ctuFeesTbody">
                   ${ctuFees.map(f => `
                     <tr>
                       <td>${escapeHtml(f.fee)}</td>
@@ -1200,7 +1232,7 @@ PAGES.enrollment = {
                 <tfoot>
                   <tr class="ctu-table-total-row">
                     <td class="right">Total Charges</td>
-                    <td class="right font-mono">9205.00</td>
+                    <td class="right font-mono" id="ctuTotalCharges">9205.00</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1227,6 +1259,61 @@ PAGES.enrollment = {
     const printBtn = select('#printCorBtn');
     if (printBtn) {
       printBtn.onclick = () => window.print();
+    }
+
+    // Dynamic Query to CTU Central MIS Cloud Database
+    if (window.CtuMis) {
+      const user = currentUser();
+      const progCode = (user.program && user.program.toUpperCase().includes('CS')) ? 'BSCS' : 'BSIT';
+      const yrLevel = (user.year && user.year.includes('1')) ? 1 : 2;
+
+      Promise.all([
+        window.CtuMis.getCurriculum(progCode, yrLevel),
+        window.CtuMis.getFees(progCode, yrLevel),
+        window.CtuMis.getStudent(user.sid)
+      ]).then(([remoteSubjects, remoteFees, masterStudent]) => {
+        if (remoteSubjects && remoteSubjects.length) {
+          const subBody = select('#ctuSubjectsTbody');
+          const totalUnitsCell = select('#ctuTotalUnits');
+          if (subBody) {
+            subBody.innerHTML = remoteSubjects.map(s => `
+              <tr>
+                <td class="center ctu-sub-code">${escapeHtml(s.section_code || s.section || '')}</td>
+                <td class="ctu-sub-code">${escapeHtml(s.subject_code || s.subject || '')}</td>
+                <td class="ctu-sub-desc">${escapeHtml(s.description || s.desc || '')}</td>
+                <td class="center font-mono">${escapeHtml(Number(s.unit).toFixed(2))}</td>
+                <td style="white-space:nowrap">${escapeHtml(s.time || '')}</td>
+                <td class="center">${escapeHtml(s.day || '')}</td>
+                <td>${escapeHtml(s.room || '')}</td>
+              </tr>
+            `).join('');
+            const total = remoteSubjects.reduce((sum, s) => sum + (parseFloat(s.unit) || 0), 0);
+            if (totalUnitsCell) totalUnitsCell.textContent = total.toFixed(2);
+          }
+        }
+
+        if (remoteFees && remoteFees.length) {
+          const feeBody = select('#ctuFeesTbody');
+          const totalChargesCell = select('#ctuTotalCharges');
+          if (feeBody) {
+            feeBody.innerHTML = remoteFees.map(f => `
+              <tr>
+                <td>${escapeHtml(f.fee_name || f.fee || '')}</td>
+                <td class="right font-mono">${escapeHtml(Number(f.amount).toFixed(2))}</td>
+              </tr>
+            `).join('');
+            const total = remoteFees.reduce((sum, f) => sum + (parseFloat(f.amount) || 0), 0);
+            if (totalChargesCell) totalChargesCell.textContent = total.toFixed(2);
+          }
+        }
+
+        if (masterStudent && masterStudent.block_name) {
+          const blockEl = select('#ctuBlockDisplay');
+          if (blockEl) blockEl.textContent = masterStudent.block_name;
+        }
+      }).catch(err => {
+        console.warn('Live MIS fetch notice (using cached load):', err);
+      });
     }
   }
 };
@@ -1449,6 +1536,19 @@ if (needsLogin && !loggedIn) {
   if (menuButton) menuButton.onclick = () => select('#sidebar').classList.toggle('open');
   const sidebarLogout = select('#sidebarLogout');
   if (sidebarLogout) sidebarLogout.onclick = event => { event.preventDefault(); logout(); };
+
+  // Live CTU Central MIS Cloud Connection Health Check
+  const cloudBadge = select('#misCloudStatus');
+  if (cloudBadge && window.CtuMis) {
+    window.CtuMis.checkConnection().then(res => {
+      if (res.connected) {
+        cloudBadge.innerHTML = `<span class="cloud-dot online pulse"></span><span class="cloud-text">CTU MIS: Online (${res.latency}ms)</span>`;
+        cloudBadge.title = `Connected to CTU MIS Central Cloud Database (Singapore)\nLatency: ${res.latency}ms`;
+      } else {
+        cloudBadge.innerHTML = `<span class="cloud-dot fallback"></span><span class="cloud-text">CTU MIS: Offline</span>`;
+      }
+    }).catch(() => {});
+  }
 
   // Show a message left by the previous page
   const message = sessionStorage.getItem('ee_flash');
