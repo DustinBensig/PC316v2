@@ -478,3 +478,102 @@ dd {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   STUDENT PROFILE CARD STYLES
+   ========================================================================== */
+.profile-header-card {
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.profile-header-flex {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+  flex-wrap: wrap;
+}
+.profile-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--b), var(--b2));
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.25);
+  flex-shrink: 0;
+}
+.profile-header-info {
+  flex: 1;
+  min-width: 200px;
+}
+.profile-badge-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 4px;
+}
+.badge-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--tx);
+}
+.badge-primary {
+  background: rgba(29, 78, 216, 0.12);
+  color: var(--b);
+  font-weight: 700;
+}
+.badge-success {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--ok);
+  font-weight: 600;
+}
+.profile-mini-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--ln);
+  color: var(--mu);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+}
+.profile-mini-edit-btn:hover {
+  background: var(--bg);
+  color: var(--b);
+  border-color: var(--b2);
+}
+.profile-dl {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px 18px;
+  font-size: 14px;
+  margin: 0;
+}
+.profile-dl dt {
+  color: var(--mu);
+  font-weight: 600;
+}
+.profile-dl dd {
+  margin: 0;
+  color: var(--tx);
+}
+@media (max-width: 600px) {
+  .profile-dl {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

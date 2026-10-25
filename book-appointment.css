@@ -478,3 +478,75 @@ dd {
     transition: none !important;
   }
 }
+
+
+/* Dynamic Document Checklist Box */
+.doc-checklist-box {
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid var(--ln);
+  border-left: 4px solid var(--b2);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 14px 0 18px;
+  transition: all 0.2s ease;
+}
+.doc-checklist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.doc-badge {
+  background: var(--b2);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.doc-location {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--b);
+}
+[data-theme="dark"] .doc-location {
+  color: #93c5fd;
+}
+.doc-notice-sub {
+  font-size: 12.5px;
+  color: var(--mu);
+  margin: 0 0 10px;
+}
+.doc-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.doc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--tx);
+}
+.doc-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: rgba(22, 163, 74, 0.15);
+  color: var(--ok);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  margin-top: 1px;
+}

@@ -478,3 +478,309 @@ dd {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   OFFICIAL CTU CERTIFICATE OF REGISTRATION (COR)
+   Modeled 1:1 on Cebu Technological University - Daanbantayan Campus
+   ========================================================================== */
+.ctu-cor-wrapper {
+  margin: 10px auto 40px;
+  max-width: 980px;
+}
+.ctu-cor-sheet {
+  background: #ffffff !important;
+  color: #111111 !important;
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
+  padding: 24px 32px 30px;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #d1d5db;
+  line-height: 1.25;
+}
+
+/* Header */
+.ctu-cor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.ctu-logo-col {
+  width: 95px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.ctu-header-logo {
+  max-width: 86px;
+  max-height: 86px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+.ctu-center-col {
+  flex: 1;
+  text-align: center;
+}
+.ctu-rep {
+  font-size: 13px;
+  font-weight: 400;
+  margin: 0;
+  color: #111;
+}
+.ctu-univ-name {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 2px 0 0;
+  color: #111;
+  letter-spacing: 0.2px;
+}
+.ctu-campus-name {
+  font-size: 14px;
+  font-weight: 800;
+  margin: 1px 0 2px;
+  color: #111;
+  letter-spacing: 0.2px;
+}
+.ctu-address {
+  font-size: 11px;
+  margin: 0;
+  color: #222;
+}
+.ctu-contact-line {
+  font-size: 10.5px;
+  margin: 2px 0 0;
+  color: #222;
+}
+.ctu-contact-line a {
+  color: #1a56db;
+  text-decoration: underline;
+}
+
+/* Dividing line & MIS */
+.ctu-divider-rule {
+  border: 0;
+  border-top: 1.5px solid #111;
+  margin: 10px 0 6px;
+}
+.ctu-mis-title {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  margin: 0 0 10px;
+  color: #111;
+}
+
+/* Document Title & Timestamp */
+.ctu-doc-title-row {
+  position: relative;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.ctu-doc-title-main {
+  font-size: 13.5px;
+  font-weight: 800;
+  margin: 0;
+  color: #111;
+  letter-spacing: 0.3px;
+}
+.ctu-doc-term {
+  font-size: 12.5px;
+  font-weight: 700;
+  margin: 2px 0 0;
+  color: #111;
+}
+.ctu-doc-timestamp {
+  position: absolute;
+  right: 0;
+  top: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #111;
+}
+
+/* Student Information Row */
+.ctu-student-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #111;
+  padding: 0 2px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ctu-info-item {
+  display: inline-flex;
+  gap: 4px;
+}
+.ctu-info-item .lbl {
+  font-weight: 600;
+}
+.ctu-info-item .val {
+  font-weight: 800;
+}
+.ctu-block-name {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Dual Column Tables */
+.ctu-tables-flex {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+.ctu-subjects-container {
+  flex: 1 1 73%;
+  overflow-x: auto;
+}
+.ctu-fees-container {
+  flex: 0 0 27%;
+  min-width: 200px;
+  overflow-x: auto;
+}
+
+/* Official CTU Table Styling */
+.ctu-grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5px;
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  color: #111;
+  background: #fff;
+}
+.ctu-grid-table th,
+.ctu-grid-table td {
+  border: 1px solid #555;
+  padding: 3.5px 4.5px;
+  line-height: 1.25;
+}
+.ctu-grid-table th {
+  background: #fff;
+  font-weight: 800;
+  text-align: left;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.ctu-grid-table td.center,
+.ctu-grid-table th.center {
+  text-align: center;
+}
+.ctu-grid-table td.right,
+.ctu-grid-table th.right {
+  text-align: right;
+}
+.ctu-sub-desc {
+  font-size: 9.5px;
+  font-weight: 500;
+}
+.ctu-sub-code {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ctu-table-total-row td {
+  font-weight: 800;
+  background: #fff;
+}
+
+/* Signatures */
+.ctu-signatures-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 10px;
+  margin: 32px 0 28px;
+}
+.ctu-sig-col {
+  width: 280px;
+}
+.ctu-sig-name {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin: 0;
+  color: #111;
+  letter-spacing: 0.3px;
+}
+.ctu-sig-rule {
+  border: 0;
+  border-top: 1px solid #111;
+  margin: 2px 0 4px;
+  width: 100%;
+}
+.ctu-sig-title {
+  font-size: 12px;
+  color: #111;
+  margin: 0;
+}
+.ctu-sig-col-student {
+  text-align: center;
+}
+.ctu-sig-col-student .ctu-sig-rule {
+  margin-top: 18px;
+}
+
+/* Discreet Print Button */
+.cor-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--ln);
+  color: var(--mu);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.cor-mini-btn:hover {
+  background: var(--bg);
+  color: var(--b);
+  border-color: var(--b2);
+}
+
+/* Print Rules */
+@media print {
+  @page {
+    size: portrait;
+    margin: 6mm 8mm;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .side, .top, .no-print, #menuButton, #sidebar, .modal, .toast {
+    display: none !important;
+  }
+  .main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .ctu-cor-wrapper {
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .ctu-cor-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  .ctu-grid-table th,
+  .ctu-grid-table td {
+    border-color: #333 !important;
+  }
+}
