@@ -1440,9 +1440,26 @@ if (needsLogin && !loggedIn) {
   goTo('dashboard');
 } else {
   const page = PAGES[currentPage];
-  const html = page.render();           // returns '' when it redirects away
-  select('#app').innerHTML = html;
-  if (html && page.setup) page.setup();
+  const usesStaticLoginShell = currentPage === 'login' && Boolean(select('#loginForm'));
+  const html = usesStaticLoginShell ? '' : page.render(); // returns '' when it redirects away
+  if (!usesStaticLoginShell) {
+    select('#app').innerHTML = html;
+  }
+  if (usesStaticLoginShell) {
+    page.setup();
+    const passwordInput = select('#loginPassword');
+    const passwordToggle = select('#togglePassword');
+    if (passwordInput && passwordToggle) {
+      passwordToggle.onclick = () => {
+        const showingPassword = passwordInput.type === 'text';
+        passwordInput.type = showingPassword ? 'password' : 'text';
+        passwordToggle.classList.toggle('fa-eye', showingPassword);
+        passwordToggle.classList.toggle('fa-eye-slash', !showingPassword);
+      };
+    }
+  } else if (html && page.setup) {
+    page.setup();
+  }
 
   // Sidebar buttons (only exist on logged-in pages)
   const menuButton = select('#menuButton');
