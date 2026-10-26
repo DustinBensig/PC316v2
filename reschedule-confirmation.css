@@ -568,22 +568,55 @@ dd {
   color: var(--ok) !important;
   font-weight: 700 !important;
 }
+.queue-qr-wrap,
 .queue-barcode-wrap {
   text-align: center;
-  padding: 14px 10px;
+  padding: 18px 14px;
   border-top: 1px dashed var(--ln);
   border-bottom: 1px dashed var(--ln);
   margin: 18px 0;
   background: rgba(0, 0, 0, 0.02);
-  border-radius: 6px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
+.queue-qr-box {
+  width: 168px;
+  height: 168px;
+  background: #ffffff;
+  border: 1px solid var(--ln);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+.queue-qr-box svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.queue-qr-code-text,
 .queue-barcode-text {
   font-family: "Courier New", Courier, monospace;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 3px;
-  margin-top: 6px;
+  letter-spacing: 2px;
+  margin-top: 10px;
   color: var(--tx);
+  text-align: center;
+}
+.queue-qr-subtext {
+  font-size: 11.5px;
+  color: var(--mu);
+  margin-top: 4px;
+  max-width: 320px;
+  line-height: 1.4;
+  text-align: center;
 }
 .queue-pass-checklist-reminder {
   font-size: 12.5px;
@@ -623,6 +656,10 @@ dd {
     width: 100% !important;
     max-width: 100% !important;
     border: 1px solid #000 !important;
+    box-shadow: none !important;
+  }
+  .queue-qr-box {
+    border: 1px solid #333 !important;
     box-shadow: none !important;
   }
 }

@@ -162,7 +162,8 @@
     { section_code: 'CO66', subject_code: 'PATHFIT 3', description: 'PHYSICAL ACTIVITIES TOWARDS HEALTH AND FITNESS 3: DANCE/SPORTS', unit: '2.00', time: '03:00PM-04:00PM', day: 'M', room: 'ROOM 10' }
   ];
 
-  const FALLBACK_FEES_BSIT2 = [
+  // Standard CTU University Fee Schedule (Universal across all programs)
+  const FALLBACK_FEES_UNIVERSAL = [
     { fee_name: 'Tuition', amount: '4200.00' },
     { fee_name: 'Athletics Fee', amount: '200.00' },
     { fee_name: 'Computer Fee', amount: '400.00' },
@@ -174,6 +175,7 @@
     { fee_name: 'Medical and Dental Fee', amount: '200.00' },
     { fee_name: 'Registration Fee', amount: '50.00' }
   ];
+  const FALLBACK_FEES_BSIT2 = FALLBACK_FEES_UNIVERSAL;
 
   // CTU Central MIS Cloud Service API
   window.CtuMis = {
@@ -237,27 +239,48 @@
       }
     },
 
-    // Query dynamic fees for Certificate of Registration (COR)
-    async getFees(programCode = 'BSIT', yearLevel = 2) {
+    // Query university fees for Certificate of Registration (COR) - Universal for ALL Students
+    async getFees(programCode = 'ALL', yearLevel = 2) {
       try {
-        const code = normalizeProgramCode(programCode);
         const yr = normalizeYearLevel(yearLevel);
+        const code = normalizeProgramCode(programCode);
+
+        // 1. Universal university fee schedule for this year level (program_code in 'ALL' or 'UNIVERSAL')
         let fees = await misClient.query('mis_fee_structures', {
-          program_code: `eq.${code}`,
+          program_code: 'in.(ALL,UNIVERSAL)',
           year_level: `eq.${yr}`,
           order: 'id.asc'
         });
+
+        // 2. If program-specific override exists, check for that program
         if (!fees || !fees.length) {
-          // Fall back to general fees
           fees = await misClient.query('mis_fee_structures', {
-            program_code: 'eq.BSIT',
+            program_code: `eq.${code}`,
+            year_level: `eq.${yr}`,
+            order: 'id.asc'
+          });
+        }
+
+        // 3. Fall back to year 2 universal fees if specific year is not found
+        if (!fees || !fees.length) {
+          fees = await misClient.query('mis_fee_structures', {
+            program_code: 'in.(ALL,UNIVERSAL)',
             year_level: 'eq.2',
             order: 'id.asc'
           });
         }
-        return (fees && fees.length) ? fees : FALLBACK_FEES_BSIT2;
+
+        // 4. Fall back to any active fees in table
+        if (!fees || !fees.length) {
+          fees = await misClient.query('mis_fee_structures', {
+            order: 'id.asc',
+            limit: '10'
+          });
+        }
+
+        return (fees && fees.length) ? fees : FALLBACK_FEES_UNIVERSAL;
       } catch (e) {
-        return FALLBACK_FEES_BSIT2;
+        return FALLBACK_FEES_UNIVERSAL;
       }
     },
 

@@ -9,6 +9,11 @@ ALTER TABLE IF EXISTS mis_curriculum_subjects DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS mis_fee_structures DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS mis_students_master DISABLE ROW LEVEL SECURITY;
 
+-- Remove program foreign key constraint from mis_fee_structures so fee schedules are universal for ALL students
+ALTER TABLE IF EXISTS mis_fee_structures DROP CONSTRAINT IF EXISTS mis_fee_structures_program_code_fkey;
+ALTER TABLE IF EXISTS mis_fee_structures ALTER COLUMN program_code DROP NOT NULL;
+ALTER TABLE IF EXISTS mis_fee_structures ALTER COLUMN program_code SET DEFAULT 'ALL';
+
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
@@ -30,7 +35,8 @@ INSERT INTO mis_programs (code, name, department) VALUES
 ('BSF', 'Bachelor of Science in Fisheries', 'Fisheries'),
 ('BIT-CT', 'Bachelor of Industrial Technology Major in Computer Technology', 'BIT'),
 ('BIT-ET', 'Bachelor of Industrial Technology Major in Electronics Technology', 'BIT'),
-('BIT-AT', 'Bachelor of Industrial Technology Major in Automotive Technology', 'BIT');
+('BIT-AT', 'Bachelor of Industrial Technology Major in Automotive Technology', 'BIT'),
+('ALL', 'All University Programs (Standard CTU Fee Schedule)', 'Central Administration');
 
 -- Step 4: Insert 1-2 Students Per Course (with 7-Digit Student IDs from Real CTU Records)
 INSERT INTO mis_students_master (student_id, full_name, program_code, year_level, section, block_name, email, contact, academic_status, clearance_status) VALUES
@@ -222,14 +228,24 @@ INSERT INTO mis_curriculum_subjects (program_code, year_level, semester, section
 ('BIT-AT', 3, '1st Semester', 'AT303', 'AT 313', 'AUTOMATIC TRANSMISSIONS AND DRIVETRAIN', 3.00, '10:00AM-01:00PM', 'F', 'AUTO SHOP'),
 ('BIT-AT', 3, '1st Semester', 'AT304', 'IT 301', 'APPLIED RESEARCH AND TECHNOLOGY PROJECT 1', 3.00, '09:00AM-11:00AM', 'Sat', 'ROOM 301');
 
--- Step 6: Fee Assessment Structures
+-- Step 6: Fee Assessment Structures (Standard CTU Schedule for ALL Students Across All Programs)
 INSERT INTO mis_fee_structures (program_code, year_level, fee_name, amount) VALUES
--- Default Standard CTU Fee Schedule (₱9,205.00 Total)
-('BSIT', 2, 'Tuition', 4200.00), ('BSIT', 2, 'Athletics Fee', 200.00), ('BSIT', 2, 'Computer Fee', 400.00),
-('BSIT', 2, 'Cultural Fee', 150.00), ('BSIT', 2, 'Development Fee', 2815.00), ('BSIT', 2, 'Guidance Fee', 90.00),
-('BSIT', 2, 'Laboratory Fee', 750.00), ('BSIT', 2, 'Library Fee', 350.00), ('BSIT', 2, 'Medical and Dental Fee', 200.00), ('BSIT', 2, 'Registration Fee', 50.00),
+-- Default Standard CTU Fee Schedule for 2nd Year (₱9,205.00 Total - Universal for All Degree Programs)
+('ALL', 2, 'Tuition', 4200.00), ('ALL', 2, 'Athletics Fee', 200.00), ('ALL', 2, 'Computer Fee', 400.00),
+('ALL', 2, 'Cultural Fee', 150.00), ('ALL', 2, 'Development Fee', 2815.00), ('ALL', 2, 'Guidance Fee', 90.00),
+('ALL', 2, 'Laboratory Fee', 750.00), ('ALL', 2, 'Library Fee', 350.00), ('ALL', 2, 'Medical and Dental Fee', 200.00), ('ALL', 2, 'Registration Fee', 50.00),
 
--- Fee Template for 1st Year (₱8,655.00 Total)
-('BSIT', 1, 'Tuition', 3800.00), ('BSIT', 1, 'Athletics Fee', 200.00), ('BSIT', 1, 'Computer Fee', 400.00),
-('BSIT', 1, 'Cultural Fee', 150.00), ('BSIT', 1, 'Development Fee', 2815.00), ('BSIT', 1, 'Guidance Fee', 90.00),
-('BSIT', 1, 'Laboratory Fee', 600.00), ('BSIT', 1, 'Library Fee', 350.00), ('BSIT', 1, 'Medical and Dental Fee', 200.00), ('BSIT', 1, 'Registration Fee', 50.00);
+-- Standard CTU Fee Schedule for 1st Year (₱8,655.00 Total - Universal for All Degree Programs)
+('ALL', 1, 'Tuition', 3800.00), ('ALL', 1, 'Athletics Fee', 200.00), ('ALL', 1, 'Computer Fee', 400.00),
+('ALL', 1, 'Cultural Fee', 150.00), ('ALL', 1, 'Development Fee', 2815.00), ('ALL', 1, 'Guidance Fee', 90.00),
+('ALL', 1, 'Laboratory Fee', 600.00), ('ALL', 1, 'Library Fee', 350.00), ('ALL', 1, 'Medical and Dental Fee', 200.00), ('ALL', 1, 'Registration Fee', 50.00),
+
+-- Standard CTU Fee Schedule for 3rd Year (₱9,205.00 Total - Universal for All Degree Programs)
+('ALL', 3, 'Tuition', 4200.00), ('ALL', 3, 'Athletics Fee', 200.00), ('ALL', 3, 'Computer Fee', 400.00),
+('ALL', 3, 'Cultural Fee', 150.00), ('ALL', 3, 'Development Fee', 2815.00), ('ALL', 3, 'Guidance Fee', 90.00),
+('ALL', 3, 'Laboratory Fee', 750.00), ('ALL', 3, 'Library Fee', 350.00), ('ALL', 3, 'Medical and Dental Fee', 200.00), ('ALL', 3, 'Registration Fee', 50.00),
+
+-- Standard CTU Fee Schedule for 4th Year (₱9,205.00 Total - Universal for All Degree Programs)
+('ALL', 4, 'Tuition', 4200.00), ('ALL', 4, 'Athletics Fee', 200.00), ('ALL', 4, 'Computer Fee', 400.00),
+('ALL', 4, 'Cultural Fee', 150.00), ('ALL', 4, 'Development Fee', 2815.00), ('ALL', 4, 'Guidance Fee', 90.00),
+('ALL', 4, 'Laboratory Fee', 750.00), ('ALL', 4, 'Library Fee', 350.00), ('ALL', 4, 'Medical and Dental Fee', 200.00), ('ALL', 4, 'Registration Fee', 50.00);
