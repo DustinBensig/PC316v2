@@ -68,6 +68,32 @@
       }
     }
 
+    async upsert(table, data) {
+      try {
+        const url = `${this.url}/rest/v1/${table}`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'apikey': this.key,
+            'Authorization': `Bearer ${this.key}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=representation'
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`[${this.name}] Upsert failed HTTP ${resp.status}: ${errText}`);
+        }
+
+        return await resp.json();
+      } catch (err) {
+        console.warn(`[${this.name}] Upsert error:`, err.message);
+        throw err;
+      }
+    }
+
     async update(table, filterField, filterVal, data) {
       try {
         const url = `${this.url}/rest/v1/${table}?${encodeURIComponent(filterField)}=eq.${encodeURIComponent(filterVal)}`;
@@ -98,6 +124,29 @@
   // Initialize REST clients
   const misClient = new SupabaseRestClient(window.SUPABASE_CONFIG.mis);
   const enrolleaseClient = new SupabaseRestClient(window.SUPABASE_CONFIG.enrollease);
+
+  function normalizeProgramCode(raw = '') {
+    const str = String(raw).toUpperCase();
+    if (str.includes('AUTOMOTIVE') || str.includes('BIT-AT')) return 'BIT-AT';
+    if (str.includes('ELECTRONICS') || str.includes('BIT-ET')) return 'BIT-ET';
+    if (str.includes('COMPUTER TECH') || str.includes('BIT-CT')) return 'BIT-CT';
+    if (str.includes('FISHERIES') || str.includes('BSF')) return 'BSF';
+    if (str.includes('LIVELIHOOD') || str.includes('BTLED') || str.includes('HOME ECON')) return 'BTLED';
+    if (str.includes('ELEMENTARY') || str.includes('BEED')) return 'BEED';
+    if (str.includes('SECONDARY') || str.includes('BSED') || str.includes('MATHEMATICS')) return 'BSED';
+    if (str.includes('INDUSTRIAL ENG') || str.includes('BSIE')) return 'BSIE';
+    if (str.includes('HOSPITALITY') || str.includes('BSHM')) return 'BSHM';
+    if (str.includes('COMPUTER SCIENCE') || str.includes('BSCS')) return 'BSCS';
+    return 'BSIT';
+  }
+
+  function normalizeYearLevel(raw = 2) {
+    const str = String(raw);
+    if (str.includes('1')) return 1;
+    if (str.includes('3')) return 3;
+    if (str.includes('4')) return 4;
+    return 2;
+  }
 
   // Fallback data if offline or network failure
   const FALLBACK_SUBJECTS_BSIT2 = [
@@ -171,8 +220,8 @@
     // Query dynamic subjects for Certificate of Registration (COR)
     async getCurriculum(programCode = 'BSIT', yearLevel = 2) {
       try {
-        const code = (programCode || 'BSIT').toUpperCase().trim();
-        const yr = parseInt(yearLevel, 10) || 2;
+        const code = normalizeProgramCode(programCode);
+        const yr = normalizeYearLevel(yearLevel);
         const subjects = await misClient.query('mis_curriculum_subjects', {
           program_code: `eq.${code}`,
           year_level: `eq.${yr}`,
@@ -181,7 +230,6 @@
         if (subjects && subjects.length) {
           return subjects;
         }
-        // If course has no custom rows yet, fall back to default CTU load
         return FALLBACK_SUBJECTS_BSIT2;
       } catch (e) {
         console.warn('Using fallback CTU subjects due to network/database response.');
@@ -192,17 +240,22 @@
     // Query dynamic fees for Certificate of Registration (COR)
     async getFees(programCode = 'BSIT', yearLevel = 2) {
       try {
-        const code = (programCode || 'BSIT').toUpperCase().trim();
-        const yr = parseInt(yearLevel, 10) || 2;
-        const fees = await misClient.query('mis_fee_structures', {
+        const code = normalizeProgramCode(programCode);
+        const yr = normalizeYearLevel(yearLevel);
+        let fees = await misClient.query('mis_fee_structures', {
           program_code: `eq.${code}`,
           year_level: `eq.${yr}`,
           order: 'id.asc'
         });
-        if (fees && fees.length) {
-          return fees;
+        if (!fees || !fees.length) {
+          // Fall back to general fees
+          fees = await misClient.query('mis_fee_structures', {
+            program_code: 'eq.BSIT',
+            year_level: 'eq.2',
+            order: 'id.asc'
+          });
         }
-        return FALLBACK_FEES_BSIT2;
+        return (fees && fees.length) ? fees : FALLBACK_FEES_BSIT2;
       } catch (e) {
         return FALLBACK_FEES_BSIT2;
       }
@@ -227,17 +280,25 @@
 
     async saveAppointment(appt) {
       try {
+        const off = appt.office || '';
+        const deptCode = off.includes('Advising') ? 'Advising' :
+                         off.includes('Registrar') ? 'Registrar' :
+                         off.includes('MIS') ? 'MIS' :
+                         (off.includes('Cashier') || off.includes('Accounting')) ? 'Cashier' :
+                         (off.includes('Clinic') || off.includes('OSAS')) ? 'Clinic' :
+                         ((appt.type || '').split(' ')[0] || 'Registrar');
+
         const payload = {
           id: appt.id,
           student_id: appt.sid,
-          appointment_type: appt.type,
-          department: (appt.type || '').split(' ')[0] || 'Registrar',
+          appointment_type: appt.service || appt.type,
+          department: deptCode,
           appointment_date: appt.date,
           appointment_time: appt.time,
           queue_number: appt.queue,
           status: appt.status || 'Confirmed'
         };
-        await enrolleaseClient.insert('ee_appointments', payload);
+        await enrolleaseClient.upsert('ee_appointments', payload);
         console.log('[EnrollEase Cloud] Appointment synced to cloud successfully.');
       } catch (e) {
         console.warn('[EnrollEase Cloud] Could not sync appointment to cloud (offline fallback active).', e.message);

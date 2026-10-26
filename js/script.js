@@ -12,70 +12,434 @@
    ===================================================================== */
 
 
-/* ---------- 1. SETTINGS ---------- */
-const APPOINTMENT_TYPES = [
-  "Registrar's Office (Document Evaluation & COR Release)",
-  "Cashier & Accounting (Assessment & Payment)",
-  "Campus Health Services (Clinic Medical Clearance)",
-  "Guidance & Counseling (Clearance & Good Moral)",
-  "Department Advising (Program Head & Subject Loading)"
-];
-
-const OFFICE_DETAILS = {
-  "Registrar's Office (Document Evaluation & COR Release)": {
-    dept: "Registrar",
-    prefix: "REG",
-    window: "Registrar Windows 1 & 2 (Administration Building)",
-    docs: [
-      "Signed Pre-Enrollment Advising Sheet",
-      "Previous Semester Official Grade Slip",
-      "Valid CTU Student ID Card",
-      "Official Clearance Slip"
-    ]
-  },
-  "Cashier & Accounting (Assessment & Payment)": {
-    dept: "Cashier",
-    prefix: "CSH",
-    window: "Cashier Windows 3 & 4 (Administration Building)",
-    docs: [
-      "Encoded Assessment Form",
-      "Validated Assessment Slip",
-      "Valid CTU Student ID Card",
-      "Official Receipt Slip (if paying balance)"
-    ]
-  },
-  "Campus Health Services (Clinic Medical Clearance)": {
-    dept: "Clinic",
-    prefix: "CLN",
-    window: "Clinic Windows 1 & 2 (Health Services Building)",
-    docs: [
-      "Annual Physical Examination Form",
-      "Signed Health Declaration Slip",
-      "Chest X-Ray / Laboratory Result Slip",
-      "Valid CTU Student ID Card"
-    ]
-  },
-  "Guidance & Counseling (Clearance & Good Moral)": {
-    dept: "Guidance",
-    prefix: "GDC",
-    window: "Student Affairs & Guidance Office (Room 204)",
-    docs: [
-      "Student Conduct & Good Moral Application Slip",
-      "Student Handbook Clearance Form",
-      "Valid CTU Student ID Card"
-    ]
-  },
-  "Department Advising (Program Head & Subject Loading)": {
-    dept: "CodeTech",
+/* ---------- 1. SETTINGS & ENROLLMENT TRANSACTION DEFINITIONS ---------- */
+const ENROLLMENT_OFFICES = {
+  "Department Chair & Academic Advising": {
+    dept: "Advising",
+    adminDept: "CodeTech",
     prefix: "ADV",
-    window: "Department Head Office (Faculty Building)",
-    docs: [
-      "Curriculum Checklist Slip (BSIT 2nd Year)",
-      "Previous Semester Grade Evaluation Form",
-      "Pre-Enrollment Advising Sheet"
-    ]
+    defaultWindow: "Department Chairperson Office (College Faculty Building)",
+    description: "Course schedule adjustments, adding/dropping subjects, overload/underload, prerequisite waivers, and curriculum evaluation.",
+    services: {
+      "Adding, Dropping, or Changing Subjects": {
+        code: "ADD_DROP",
+        window: "Department Chairperson Office (Faculty Hall, Room 101)",
+        docs: [
+          "Pre-Enrollment Advising Sheet",
+          "Certificate of Registration (COR) / Assessment Form",
+          "Official Adding/Dropping Form (Signed by Instructor & Chairperson)",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Enter affected subject codes and section:",
+        placeholder: "e.g., Drop CC 103 (Sec A), Add IT 211 (Sec B)"
+      },
+      "Schedule Conflict Resolution": {
+        code: "SCHED_CONFLICT",
+        window: "Department Chairperson Office (Faculty Hall, Room 101)",
+        docs: [
+          "Pre-Enrollment Advising Form",
+          "Class Schedule Printout showing overlapping lecture/lab hours",
+          "Department Chairperson Special Block Override Endorsement",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Specify overlapping subjects and days/hours:",
+        placeholder: "e.g., CC 104 Lab (Mon 1-4PM) overlaps with MATH 102 (Mon 2-3:30PM)"
+      },
+      "Overload / Underload Request": {
+        code: "OVER_UNDERLOAD",
+        window: "College Dean / Chairperson Office (Faculty Hall)",
+        docs: [
+          "Evaluation of Grades / Academic History Summary",
+          "Overload/Underload Application Form with Justification",
+          "Graduating Senior Evaluation Form (for overload) or Working Student Certificate (for underload)",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "State total requested units & reason (graduating / working student):",
+        placeholder: "e.g., Requesting 29 units (Graduating student needing 1 extra subject)"
+      },
+      "Prerequisite Waiver & Petition Class": {
+        code: "PREREQ_PETITION",
+        window: "Department Chairperson Office (Faculty Hall, Room 102)",
+        docs: [
+          "Official Prerequisite Waiver Form signed by Instructor & Chair",
+          "Transcript of Records / COG showing prerequisite deficiency",
+          "Petition Class Request Form with list of petitioning students",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Enter the advanced subject and missing prerequisite subject code:",
+        placeholder: "e.g., Requesting simultaneous enrollment in IT 212 while clearing IT 102"
+      },
+      "Curriculum Evaluation & Crediting": {
+        code: "CURR_EVAL",
+        window: "Department Academic Evaluator Desk (Faculty Hall)",
+        docs: [
+          "Official Transcript of Records (TOR) or Certified Copy of Grades",
+          "Official Course Description / Syllabus from previous institution or program",
+          "Curriculum Crediting & Validation Application Slip",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "State your previous course/school and subjects for crediting:",
+        placeholder: "e.g., Shiftee from BSIE 1st Year crediting GE Math, GE Purposive Comm"
+      }
+    }
+  },
+
+  "Registrar’s Office (Records & Admission)": {
+    dept: "Registrar",
+    adminDept: "Registrar",
+    prefix: "REG",
+    defaultWindow: "Registrar Counter Windows 1 & 2 (Administration Building)",
+    description: "Academic records, INC grade completion, document submissions, official COR stamping, and late registration.",
+    services: {
+      "INC (Incomplete) Completion & Grade Correction": {
+        code: "INC_CORRECTION",
+        window: "Registrar Window 1 (Evaluation & Grades Section)",
+        docs: [
+          "Official Signed INC Completion Form from Subject Instructor",
+          "Official Grade Sheet copy with Dean's signature",
+          "INC Completion Fee Official Receipt Slip",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Subject code, instructor name, and academic term of INC:",
+        placeholder: "e.g., CC 102 - OOP (1st Sem 2025-2026, Prof. Santos)"
+      },
+      "Submission of Lacking Requirements": {
+        code: "LACKING_DOCS",
+        window: "Registrar Window 2 (Admissions & Records Section)",
+        docs: [
+          "Original & Photocopy of Lacking Document (PSA Birth Cert / Form 137 / Form 138 / Good Moral)",
+          "Lacking Requirements Tracking Slip from initial registration",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "List the documents you are submitting today:",
+        placeholder: "e.g., Original PSA Birth Certificate and Certified True Copy Form 137"
+      },
+      "COR Printing, Validation & Stamping": {
+        code: "COR_VALIDATION",
+        window: "Registrar Window 1 & 2 (Administration Building)",
+        docs: [
+          "Printed Pre-Assessment / Enrollment Slip",
+          "Approved Advising Form for the current semester",
+          "Clearance Slip (Medical, Guidance, Department)",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Note any specific requirements (e.g., need 2 stamped original copies):",
+        placeholder: "e.g., 1st Semester 2026-2027 Official COR Stamping"
+      },
+      "Document Requests & Claiming (TOR, COG, CAV)": {
+        code: "DOC_REQUEST",
+        window: "Registrar Releasing Counter (Admin Building)",
+        docs: [
+          "Official Document Request Form / Claim Slip",
+          "Official Receipt Slip for document fee",
+          "University Clearance Slip",
+          "Valid CTU Student ID Card (or Authorization Letter with IDs if representative)"
+        ],
+        hint: "Document requested and Claiming Reference Slip #:",
+        placeholder: "e.g., Transcript of Records (TOR) & Certificate of Good Moral"
+      },
+      "Late Registration Processing": {
+        code: "LATE_REG",
+        window: "Registrar Window 3 (Special Processing Desk)",
+        docs: [
+          "Letter of Explanation for Late Enrollment addressed to Registrar & Campus Director",
+          "Endorsement from Department Chairperson",
+          "Pre-Enrollment Advising Sheet",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Briefly specify the reason for late registration:",
+        placeholder: "e.g., Delayed submission of transfer credentials / medical emergency"
+      }
+    }
+  },
+
+  "MIS / Campus IT Support": {
+    dept: "MIS",
+    adminDept: "MIS",
+    prefix: "MIS",
+    defaultWindow: "MIS & ICT Center (Administration Building, 2nd Floor, Room 208)",
+    description: "Student portal account recovery, curriculum sync errors, clearance overrides, and campus ID photo capture/re-issuance.",
+    services: {
+      "Student Portal Account Recovery": {
+        code: "PORTAL_RECOVERY",
+        window: "MIS Counter 1 (User Accounts & Support Desk)",
+        docs: [
+          "Valid CTU Student ID Card or Valid Government ID",
+          "Proof of Enrollment (Recent COR or Grade Slip)",
+          "Registered University / Personal Email Address"
+        ],
+        hint: "Describe account issue (forgot password, email changed, locked portal):",
+        placeholder: "e.g., Locked out of CTU Portal, registered phone number no longer active"
+      },
+      "System Tagging & Curriculum Sync Fix": {
+        code: "CURR_SYNC_FIX",
+        window: "MIS Counter 2 (Database & Systems Desk)",
+        docs: [
+          "Official Grade Evaluation Slip / Transcript proving passed subjects",
+          "Signed Pre-Enrollment Advising Slip showing correct curriculum year",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Specify error details (e.g., tagged in wrong year, passed subject marked uncompleted):",
+        placeholder: "e.g., CC 101 passed in 1st sem still showing 'prerequisite missing' for CC 102"
+      },
+      "Clearance Hold Digital Override": {
+        code: "CLEARANCE_OVERRIDE",
+        window: "MIS Counter 1 (User Accounts & Support Desk)",
+        docs: [
+          "Signed Physical Clearance Slip from the office in question (Clinic, Guidance, or Cashier)",
+          "Department Endorsement Slip",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Which office cleared you physically that is still holding you online?:",
+        placeholder: "e.g., Clinic signed physical clearance on Oct 24, but portal still shows Clinic Hold"
+      },
+      "Campus ID Data Capture & Re-issuance": {
+        code: "ID_CAPTURE",
+        window: "MIS ID Capture & Biometrics Booth (Room 210)",
+        docs: [
+          "Officially Validated Certificate of Registration (COR)",
+          "Affidavit of Loss (if replacing lost ID) or Surrender of Damaged ID",
+          "Payment Receipt for ID Replacement (if applicable)",
+          "Valid Government ID or Barangay Certificate"
+        ],
+        hint: "Specify: New ID Capture, Lost ID Replacement, or Damaged RFID chip:",
+        placeholder: "e.g., Replacement ID (Lost RFID card with Affidavit of Loss attached)"
+      }
+    }
+  },
+
+  "Accounting, Cashier & Scholarship Office": {
+    dept: "Cashier",
+    adminDept: "Cashier",
+    prefix: "CSH",
+    defaultWindow: "Cashier & Accounting Windows 3 & 4 (Administration Building)",
+    description: "Fee assessment adjustments, UniFAST verification, scholarship validation, promissory notes, and payments.",
+    services: {
+      "Fee Assessment & Re-assessment": {
+        code: "FEE_ASSESSMENT",
+        window: "Accounting Assessment Window 3 (Admin Building)",
+        docs: [
+          "Pre-Enrollment Assessment Slip",
+          "Certificate of Free Higher Education (UniFAST) Eligibility Status",
+          "Official Grade History (if calculating retake/over-staying units)",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Detail the billing or assessment discrepancy:",
+        placeholder: "e.g., Regular 2nd year student mistakenly assessed tuition under UniFAST RA 10931"
+      },
+      "Scholarship Validation & Stipend Processing": {
+        code: "SCHOLARSHIP_VALIDATION",
+        window: "Scholarship & Grants Counter Window 4 (Admin Building)",
+        docs: [
+          "Official Scholarship Award Notice / Certificate (CHED, TES, TDP, Provincial/LGU, DOST)",
+          "Officially Enrolled Certificate of Registration (COR) for the current term",
+          "Official Statement of Account or Billing Slip",
+          "Valid CTU Student ID Card & Landbank ATM Card Photocopy (if stipend)"
+        ],
+        hint: "Scholarship program name and awardee ID number:",
+        placeholder: "e.g., CHED Tulong Dunong Program (TDP) / TES Awardee Batch 2024"
+      },
+      "Promissory Note Approval": {
+        code: "PROMISSORY_NOTE",
+        window: "Accounting Head Office (Admin Building, Room 105)",
+        docs: [
+          "Completed Promissory Note Application Form signed by Parent/Guardian",
+          "Photocopy of Parent/Guardian Valid Government ID with 3 specimen signatures",
+          "Previous Semester Statement of Account",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Back account amount and agreed target payment date:",
+        placeholder: "e.g., PHP 3,500 balance from previous summer class, payment promise by Midterms"
+      },
+      "Miscellaneous & Special Payments": {
+        code: "MISC_PAYMENTS",
+        window: "Cashier Window 4 (Payments Desk)",
+        docs: [
+          "Order of Payment Slip issued by the concerned department",
+          "Exact payment amount or check payable to Cebu Technological University",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Payment purpose (Graduation fee, Lost ID, NSTP fee, Manuals):",
+        placeholder: "e.g., Payment for Lost CTU Student RFID card replacement fee (PHP 150)"
+      }
+    }
+  },
+
+  "Clinic, Guidance & Student Affairs (OSAS)": {
+    dept: "Clinic",
+    adminDept: "Clinic",
+    prefix: "OSA",
+    defaultWindow: "University Health Services & OSAS Center (Student Activity Building)",
+    description: "Mandatory medical & dental checkups, guidance intake/exit counseling, and multi-office clearance sign-offs.",
+    services: {
+      "Medical & Dental Physical Examination": {
+        code: "MED_EXAM",
+        window: "Campus Health Clinic (Health Services Building, Ground Floor)",
+        docs: [
+          "Annual Physical Examination Form (CTU Clinic Form 1)",
+          "Recent Chest X-Ray Film / Digital Radiologist Result (within last 6 months)",
+          "Complete Blood Count (CBC) and Urinalysis Laboratory Result Slips",
+          "Dental Examination Record Form",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "State if routine annual exam, freshman entry exam, or OJT clinical clearance:",
+        placeholder: "e.g., Annual enrollment medical clearance (BSIT 2nd Year, X-Ray film ready)"
+      },
+      "Guidance Intake & Exit Interview": {
+        code: "GUIDANCE_INTERVIEW",
+        window: "Guidance & Counseling Center (OSAS Building, Room 204)",
+        docs: [
+          "Student Cumulative Record / Guidance Intake Form",
+          "Referral Slip (if referred by Department Chair for Academic Probation)",
+          "Exit / Shifting Clearance Form (if shifting or transferring out)",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "Purpose: Freshman Intake, Academic Probation counseling, or Shifting Interview:",
+        placeholder: "e.g., Shifting counseling from BSIE to BSIT / Academic advising follow-up"
+      },
+      "Clearance Signing & Organization Validation": {
+        code: "CLEARANCE_SIGNING",
+        window: "OSAS Student Affairs Counter & Library Clearance Desk",
+        docs: [
+          "Official Student Clearance Slip (Multi-Office Sign-off Form)",
+          "Supreme Student Council (SSC) & College Org Membership Receipts",
+          "University Library Borrower's Card & Clearance Stamped Book Return Slip",
+          "Valid CTU Student ID Card"
+        ],
+        hint: "List offices you need signed (e.g. SSC, Library, Campus Laboratory):",
+        placeholder: "e.g., Supreme Student Council (SSC) validation & Campus Library clearance"
+      }
+    }
   }
 };
+
+// Legacy APPOINTMENT_TYPES array kept for backwards compatibility
+const APPOINTMENT_TYPES = Object.keys(ENROLLMENT_OFFICES);
+
+// Central helper to resolve office details, prefixes, windows, and required documents
+function getOfficeDetails(officeName, serviceName) {
+  if (!serviceName && officeName) {
+    if (ENROLLMENT_OFFICES[officeName]) {
+      const o = ENROLLMENT_OFFICES[officeName];
+      const firstServiceKey = Object.keys(o.services)[0];
+      const s = o.services[firstServiceKey];
+      return {
+        office: officeName,
+        service: firstServiceKey,
+        dept: o.dept,
+        adminDept: o.adminDept,
+        prefix: o.prefix,
+        window: s.window || o.defaultWindow,
+        docs: s.docs,
+        hint: s.hint,
+        placeholder: s.placeholder
+      };
+    }
+    for (const [off, offData] of Object.entries(ENROLLMENT_OFFICES)) {
+      if (offData.services[officeName]) {
+        const s = offData.services[officeName];
+        return {
+          office: off,
+          service: officeName,
+          dept: offData.dept,
+          adminDept: offData.adminDept,
+          prefix: offData.prefix,
+          window: s.window,
+          docs: s.docs,
+          hint: s.hint,
+          placeholder: s.placeholder
+        };
+      }
+    }
+    for (const [off, offData] of Object.entries(ENROLLMENT_OFFICES)) {
+      for (const [srv, srvData] of Object.entries(offData.services)) {
+        if (officeName.includes(srv) || officeName.toLowerCase().includes(offData.dept.toLowerCase())) {
+          return {
+            office: off,
+            service: srv,
+            dept: offData.dept,
+            adminDept: offData.adminDept,
+            prefix: offData.prefix,
+            window: srvData.window,
+            docs: srvData.docs,
+            hint: srvData.hint,
+            placeholder: srvData.placeholder
+          };
+        }
+      }
+    }
+  }
+
+  const o = ENROLLMENT_OFFICES[officeName];
+  if (o) {
+    const s = o.services[serviceName];
+    if (s) {
+      return {
+        office: officeName,
+        service: serviceName,
+        dept: o.dept,
+        adminDept: o.adminDept,
+        prefix: o.prefix,
+        window: s.window,
+        docs: s.docs,
+        hint: s.hint,
+        placeholder: s.placeholder
+      };
+    }
+    return {
+      office: officeName,
+      service: serviceName || '',
+      dept: o.dept,
+      adminDept: o.adminDept,
+      prefix: o.prefix,
+      window: o.defaultWindow,
+      docs: ["Valid CTU Student ID Card", "Pre-Enrollment Advising Sheet"]
+    };
+  }
+
+  return {
+    office: officeName || 'Campus Office',
+    service: serviceName || officeName || 'General Transaction',
+    dept: 'Registrar',
+    adminDept: 'Registrar',
+    prefix: 'Q',
+    window: 'Administration Building',
+    docs: ['Valid CTU Student ID Card', 'Pre-Enrollment Advising Sheet']
+  };
+}
+
+// Populate OFFICE_DETAILS dictionary for instant lookup
+const OFFICE_DETAILS = {};
+for (const [offName, offData] of Object.entries(ENROLLMENT_OFFICES)) {
+  OFFICE_DETAILS[offName] = {
+    dept: offData.dept,
+    adminDept: offData.adminDept,
+    prefix: offData.prefix,
+    window: offData.defaultWindow,
+    docs: ["Valid CTU Student ID Card", "Pre-Enrollment Advising Sheet"]
+  };
+  for (const [srvName, srvData] of Object.entries(offData.services)) {
+    OFFICE_DETAILS[srvName] = {
+      office: offName,
+      service: srvName,
+      dept: offData.dept,
+      adminDept: offData.adminDept,
+      prefix: offData.prefix,
+      window: srvData.window,
+      docs: srvData.docs,
+      hint: srvData.hint,
+      placeholder: srvData.placeholder
+    };
+    OFFICE_DETAILS[`${offName} - ${srvName}`] = OFFICE_DETAILS[srvName];
+  }
+}
+
+// Preserve legacy keys so previous sessions/fixtures continue to function seamlessly
+OFFICE_DETAILS["Registrar's Office (Document Evaluation & COR Release)"] = OFFICE_DETAILS["COR Printing, Validation & Stamping"];
+OFFICE_DETAILS["Cashier & Accounting (Assessment & Payment)"] = OFFICE_DETAILS["Fee Assessment & Re-assessment"];
+OFFICE_DETAILS["Campus Health Services (Clinic Medical Clearance)"] = OFFICE_DETAILS["Medical & Dental Physical Examination"];
+OFFICE_DETAILS["Guidance & Counseling (Clearance & Good Moral)"] = OFFICE_DETAILS["Guidance Intake & Exit Interview"];
+OFFICE_DETAILS["Department Advising (Program Head & Subject Loading)"] = OFFICE_DETAILS["Adding, Dropping, or Changing Subjects"];
 
 const TIME_SLOTS = [
   '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
@@ -100,44 +464,90 @@ function saveData(key, value) {
 
 // A demo account so you can log in right away.
 let users = loadData('ee_users');
-if (!users || !Array.isArray(users) || users.length === 0 || !users.some(u => u.sid === '2024-00123')) {
-  const demoUser = {
-    name: 'Juan Dela Cruz', sid: '2024-00123', email: 'juan@student.edu',
-    password: 'demo1234', contact: '0917 123 4567',
-    program: 'BS Information Technology', year: '2nd Year', section: 'BSIT 2-A', enrolled: '2024-06-10',
-    status: 'Regular / Officially Enrolled'
-  };
-  users = Array.isArray(users) ? [...users.filter(u => u.sid !== '2024-00123'), demoUser] : [demoUser];
+const defaultCtuUser = {
+  name: 'CAPECENIO, LLYOD', sid: '8240873', email: 'capecenio.llyod@ctu.edu.ph',
+  password: 'demo1234', contact: '0912 345 6789',
+  program: 'Bachelor of Science in Information Technology', programCode: 'BSIT', yearLevel: 2, year: '2nd Year', section: 'BSIT 2-A', enrolled: '2024-06-10',
+  status: 'Officially Enrolled'
+};
+const secondaryDemo = {
+  name: 'Juan Dela Cruz', sid: '2024-00123', email: 'juan@student.edu',
+  password: 'demo1234', contact: '0917 123 4567',
+  program: 'Bachelor of Science in Information Technology', programCode: 'BSIT', yearLevel: 2, year: '2nd Year', section: 'BSIT 2-A', enrolled: '2024-06-10',
+  status: 'Officially Enrolled'
+};
+
+if (!users || !Array.isArray(users) || users.length === 0 || !users.some(u => u.sid === '8240873')) {
+  users = Array.isArray(users) ? [...users.filter(u => u.sid !== '8240873' && u.sid !== '2024-00123'), defaultCtuUser, secondaryDemo] : [defaultCtuUser, secondaryDemo];
   saveData('ee_users', users);
 }
+// Session is set only when user logs in
 // Dark / light mode
 document.documentElement.dataset.theme = loadData('ee_theme', 'light');
 
 function allUsers()        { return loadData('ee_users', []); }
 function allAppointments() { return loadData('ee_appointments', []); }
 function currentUser()     {
-  const user = allUsers().find(u => u.sid === loadData('ee_session'));
-  if (user && !user.section) {
-    user.section = user.program && user.program.toLowerCase().includes('information technology') ? 'BSIT 2-A' : 'Section 2-A';
+  const sessionSid = loadData('ee_session');
+  if (!sessionSid) return null;
+  const user = allUsers().find(u => String(u.sid) === String(sessionSid));
+  if (user) {
+    if (!user.programCode) {
+      const p = (user.program || '').toUpperCase();
+      if (p.includes('HOSPITALITY') || p === 'BSHM') user.programCode = 'BSHM';
+      else if (p.includes('INDUSTRIAL ENGINEERING') || p === 'BSIE') user.programCode = 'BSIE';
+      else if (p.includes('ELEMENTARY') || p === 'BEED') user.programCode = 'BEED';
+      else if (p.includes('SECONDARY') || p === 'BSED') user.programCode = 'BSED';
+      else if (p.includes('LIVELIHOOD') || p === 'BTLED') user.programCode = 'BTLED';
+      else if (p.includes('FISHERIES') || p === 'BSF') user.programCode = 'BSF';
+      else if (p.includes('COMPUTER TECH') || p === 'BIT-CT') user.programCode = 'BIT-CT';
+      else if (p.includes('ELECTRONICS') || p === 'BIT-ET') user.programCode = 'BIT-ET';
+      else if (p.includes('AUTOMOTIVE') || p === 'BIT-AT') user.programCode = 'BIT-AT';
+      else user.programCode = 'BSIT';
+    }
+    if (!user.yearLevel) {
+      const yStr = String(user.year || '');
+      if (yStr.includes('1')) user.yearLevel = 1;
+      else if (yStr.includes('2')) user.yearLevel = 2;
+      else if (yStr.includes('3')) user.yearLevel = 3;
+      else if (yStr.includes('4')) user.yearLevel = 4;
+      else user.yearLevel = 2;
+    }
+    if (!user.section) {
+      user.section = `${user.programCode} ${user.yearLevel}-A`;
+    }
   }
   return user;
 }
 function myAppointments()  {
   syncFromAdminDashboard();
-  return allAppointments().filter(a => a.sid === loadData('ee_session'));
+  const sessionSid = loadData('ee_session');
+  if (!sessionSid) return [];
+  return allAppointments().filter(a => String(a.sid) === String(sessionSid));
 }
 
 /* Two-Way Sync between Student Bookings and Admin Dashboard */
 function syncToAdminDashboard(appt, user) {
   try {
     const adminAppts = loadData('enrolle_admin_appointments', []);
-    const deptInfo = OFFICE_DETAILS[appt.type] || { dept: 'Registrar' };
+    const details = getOfficeDetails(appt.office || appt.type, appt.service);
+
+    // Route Academic Advising to the student's specific college admin
+    let targetDept = details.adminDept || details.dept || 'Registrar';
+    if (targetDept === 'Advising' || targetDept === 'CodeTech') {
+      const prog = (user.program || '').toUpperCase();
+      if (prog.includes('HOSPITALITY') || prog.includes('BSHM')) targetDept = 'HM';
+      else if (prog.includes('EDUCATION') || prog.includes('BSED') || prog.includes('BEED') || prog.includes('BTLED')) targetDept = 'COED';
+      else if (prog.includes('INDUSTRIAL') || prog.includes('BSIE') || prog.includes('BIT')) targetDept = 'BIT';
+      else targetDept = 'CodeTech';
+    }
+
     const adminAppt = {
       id: `EA-${appt.id.slice(-4)}`,
       student: user.name,
       studentId: user.sid,
       program: user.program,
-      department: deptInfo.dept,
+      department: targetDept,
       date: appt.date,
       time: appt.time,
       status: 'Pending',
@@ -155,7 +565,7 @@ function syncToAdminDashboard(appt, user) {
       name: user.name,
       email: user.email,
       program: user.program,
-      homeDepartment: deptInfo.dept === 'Registrar' || deptInfo.dept === 'Cashier' ? 'CodeTech' : deptInfo.dept,
+      homeDepartment: targetDept === 'Registrar' || targetDept === 'Cashier' ? 'CodeTech' : targetDept,
       active: true
     };
     saveData('enrolle_admin_students', adminStudents);
@@ -322,6 +732,8 @@ function showModal(html) {
 
 function logout() {
   localStorage.removeItem('ee_session');
+  sessionStorage.removeItem('ee_session');
+  sessionStorage.removeItem('ee_draft');
   flashMessage('You have been logged out.');
   goTo('login');
 }
@@ -367,8 +779,30 @@ function addDemoPastAppointments(sid) {
     return d.toISOString().slice(0, 10);
   };
   list.push(
-    { id: 'demo1-' + sid, sid, type: 'Enrollment Assistance', date: daysAgo(21), time: '09:00 AM', queue: 'Q-004', status: 'Completed' },
-    { id: 'demo2-' + sid, sid, type: 'Document Submission',   date: daysAgo(9),  time: '02:00 PM', queue: 'Q-011', status: 'Completed' }
+    {
+      id: 'demo1-' + sid,
+      sid,
+      office: 'Department Chair & Academic Advising',
+      service: 'Curriculum Evaluation & Crediting',
+      type: 'Curriculum Evaluation & Crediting',
+      note: 'Curriculum evaluation and pre-requisite verification',
+      date: daysAgo(21),
+      time: '09:00 AM',
+      queue: 'ADV-014',
+      status: 'Completed'
+    },
+    {
+      id: 'demo2-' + sid,
+      sid,
+      office: 'Registrar’s Office (Records & Admission)',
+      service: 'Submission of Lacking Requirements',
+      type: 'Submission of Lacking Requirements',
+      note: 'Form 137 / PSA Birth Certificate verified',
+      date: daysAgo(9),
+      time: '02:00 PM',
+      queue: 'REG-008',
+      status: 'Completed'
+    }
   );
   saveData('ee_appointments', list);
 }
@@ -405,7 +839,10 @@ function generateBarcodeSvg(code) {
 
 function renderQueuePassCard(appt, title = 'Appointment Confirmed!') {
   const user = currentUser();
-  const details = OFFICE_DETAILS[appt.type] || {};
+  const details = getOfficeDetails(appt.office || appt.type, appt.service);
+  const displayOffice = appt.office || details.office || 'Campus Office';
+  const displayService = appt.service || appt.type;
+
   return `
     <div class="card queue-pass-card" id="printableQueuePass">
       <div class="queue-pass-badge-header">
@@ -433,15 +870,19 @@ function renderQueuePassCard(appt, title = 'Appointment Confirmed!') {
           </div>
           <div class="queue-pass-field">
             <span class="q-label">Student ID</span>
-            <span class="q-val">${escapeHtml(user ? user.sid : '2024-00123')}</span>
+            <span class="q-val">${escapeHtml(user ? user.sid : '8240873')}</span>
           </div>
           <div class="queue-pass-field">
             <span class="q-label">Section & Program</span>
             <span class="q-val">${escapeHtml(user ? (user.section || 'BSIT 2-A') : 'BSIT 2-A')} · ${escapeHtml(user ? (user.program || 'BSIT') : 'BSIT')}</span>
           </div>
           <div class="queue-pass-field">
-            <span class="q-label">Transaction Type</span>
-            <span class="q-val">${escapeHtml(appt.type)}</span>
+            <span class="q-label">Campus Office</span>
+            <span class="q-val">${escapeHtml(displayOffice)}</span>
+          </div>
+          <div class="queue-pass-field">
+            <span class="q-label">Specific Transaction</span>
+            <span class="q-val"><b>${escapeHtml(displayService)}</b></span>
           </div>
           <div class="queue-pass-field">
             <span class="q-label">Appointment Date</span>
@@ -451,6 +892,12 @@ function renderQueuePassCard(appt, title = 'Appointment Confirmed!') {
             <span class="q-label">Designated Time Slot</span>
             <span class="q-val"><b>${appt.time}</b></span>
           </div>
+          ${appt.note ? `
+          <div class="queue-pass-field" style="grid-column: 1 / -1; background: rgba(59,130,246,0.05); border: 1px solid var(--ln); border-radius: 6px; padding: 8px 12px;">
+            <span class="q-label">Subject / Reference Notes</span>
+            <span class="q-val" style="color:var(--b2);font-weight:600;font-size:13px">${escapeHtml(appt.note)}</span>
+          </div>
+          ` : ''}
         </div>
 
         <div class="queue-barcode-wrap">
@@ -473,9 +920,10 @@ function renderQueuePassCard(appt, title = 'Appointment Confirmed!') {
     </div>`;
 }
 
-// Queue numbers count up per day and office prefix: REG-001, CSH-001, etc.
-function nextQueueNumber(date, type = '') {
-  const prefix = (type && OFFICE_DETAILS[type]?.prefix) ? OFFICE_DETAILS[type].prefix : 'Q';
+// Queue numbers count up per day and office prefix: ADV-001, REG-001, MIS-001, CSH-001, OSA-001
+function nextQueueNumber(date, officeOrService = '', service = '') {
+  const details = getOfficeDetails(officeOrService, service);
+  const prefix = details.prefix || 'Q';
   const countThatDay = allAppointments().filter(a => a.date === date && (a.queue || '').startsWith(prefix)).length;
   return `${prefix}-${String(countThatDay + 1).padStart(3, '0')}`;
 }
@@ -587,18 +1035,26 @@ PAGES.index = {
 
 /* 2. Login */
 PAGES.login = {
-  render: () => `
+  render: () => {
+    const user = currentUser();
+    return `
     <div class="auth"><form class="card" id="loginForm" novalidate>
       <div class="logo center">Enroll<span>Ease</span></div>
       <h2 class="center">Welcome back</h2>
-      <p class="muted center">Demo: 2024-00123 / demo1234</p>
+      ${user ? `
+      <div style="background:rgba(59,130,246,0.08);border:1px solid var(--ln);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:13px;text-align:center">
+        Active session: <b>${escapeHtml(user.name)}</b> (${escapeHtml(user.sid)})<br>
+        <a href="dashboard.html" style="font-weight:700">Go to Dashboard ➔</a>
+      </div>` : ''}
+      <p class="muted center">Demo ID: <b>8240873</b> / Password: <b>demo1234</b></p>
       ${inputField('loginId', 'Email Address or Student ID')}
       ${inputField('loginPassword', 'Password', 'password')}
       <a href="#" id="forgotLink">Forgot password?</a><br><br>
       <button class="btn" style="width:100%">Login</button>
       <p class="center">No account yet? <a href="register.html">Register</a></p>
       <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin sign in</a></p>
-    </form></div>`,
+    </form></div>`;
+  },
 
   setup() {
     select('#loginForm').onsubmit = async event => {
@@ -615,26 +1071,47 @@ PAGES.login = {
       let user = allUsers().find(u =>
         u.email.toLowerCase() === typedId.toLowerCase() || u.sid === typedId);
 
-      // Query CTU Central MIS Cloud Database if account not in local storage yet
-      if (!user && window.CtuMis) {
+      // Query CTU Central MIS Cloud Database to sync master record
+      if (window.CtuMis) {
         try {
           const master = await window.CtuMis.getStudent(typedId);
           if (master) {
+            const progMap = {
+              'BSIT': 'Bachelor of Science in Information Technology',
+              'BSHM': 'Bachelor of Science in Hospitality Management',
+              'BSIE': 'Bachelor of Science in Industrial Engineering',
+              'BEED': 'Bachelor of Elementary Education',
+              'BSED': 'Bachelor of Secondary Education Major in Mathematics',
+              'BTLED': 'Bachelor in Technology and Livelihood Education Major in Home Economics',
+              'BSF': 'Bachelor of Science in Fisheries',
+              'BIT-CT': 'Bachelor of Industrial Technology Major in Computer Technology',
+              'BIT-ET': 'Bachelor of Industrial Technology Major in Electronics Technology',
+              'BIT-AT': 'Bachelor of Industrial Technology Major in Automotive Technology',
+              'BSCS': 'Bachelor of Science in Computer Science'
+            };
+            const programName = progMap[master.program_code] || master.program_code;
+            const yrString = `${master.year_level === 1 ? '1st' : (master.year_level === 2 ? '2nd' : (master.year_level === 3 ? '3rd' : '4th'))} Year`;
+
             user = {
               name: master.full_name,
               sid: master.student_id,
               email: master.email || `${master.student_id}@student.ctu.edu.ph`,
-              password: 'demo1234',
+              password: (user && user.password) ? user.password : 'demo1234',
               contact: master.contact || '0912 345 6789',
-              program: master.program_code === 'BSCS' ? 'BS Computer Science' : 'BS Information Technology',
-              year: `${master.year_level === 1 ? '1st' : (master.year_level === 2 ? '2nd' : '3rd')} Year`,
+              program: programName,
+              programCode: master.program_code,
+              yearLevel: master.year_level,
+              year: yrString,
               section: master.section,
               blockName: master.block_name,
               status: master.academic_status || 'Officially Enrolled'
             };
-            saveData('ee_users', [...allUsers(), user]);
+            const remaining = allUsers().filter(u => u.sid !== user.sid);
+            saveData('ee_users', [...remaining, user]);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('MIS login lookup notice:', e);
+        }
       }
 
       if (!user) return showError('loginId', 'No account found for that email or student ID.');
@@ -670,7 +1147,7 @@ PAGES.register = {
       <div class="logo center">Enroll<span>Ease</span></div>
       <h2 class="center">Create Account</h2>
       ${inputField('regName', 'Full Name')}
-      ${inputField('regSid', 'Student ID', 'text', '', 'placeholder="2024-00000"')}
+      ${inputField('regSid', 'Student ID (7 digits)', 'text', '', 'placeholder="8240873" maxlength="7"')}
       ${inputField('regEmail', 'Email Address', 'email')}
       ${inputField('regPassword', 'Password', 'password')}
       ${inputField('regConfirm', 'Confirm Password', 'password')}
@@ -691,7 +1168,7 @@ PAGES.register = {
 
       let valid = true;
       if (name.length < 3) valid = showError('regName', 'Enter your full name.');
-      if (!/^[\w-]{5,}$/.test(sid)) valid = showError('regSid', 'Student ID needs at least 5 letters, numbers or dashes.');
+      if (!/^\d{7}$/.test(sid)) valid = showError('regSid', 'Student ID must be exactly 7 digits (e.g. 8240873).');
       else if (users.some(u => u.sid === sid)) valid = showError('regSid', 'This Student ID is already registered.');
       if (!/^\S+@\S+\.\S+$/.test(email)) valid = showError('regEmail', 'Enter a valid email address.');
       else if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) valid = showError('regEmail', 'This email is already registered.');
@@ -701,7 +1178,13 @@ PAGES.register = {
 
       users.push({
         name, sid, email, password, contact: '',
-        program: 'BS Information Technology', year: '1st Year', section: 'BSIT 1-A', enrolled: todayString()
+        program: 'Bachelor of Science in Information Technology',
+        programCode: 'BSIT',
+        yearLevel: 1,
+        year: '1st Year',
+        section: 'BSIT 1-A',
+        enrolled: todayString(),
+        status: 'Officially Enrolled'
       });
       saveData('ee_users', users);
       addDemoPastAppointments(sid);
@@ -735,13 +1218,13 @@ PAGES.dashboard = {
       <div class="card study-load-widget">
         <div class="study-load-main">
           <div class="study-load-info">
-            <div class="study-load-tag">Official Study Load · 1st Semester A.Y. 2024-2025</div>
-            <h3 class="study-load-title">${escapeHtml(user.program || 'BS Information Technology')}</h3>
+            <div class="study-load-tag">Official Study Load · 1st Semester A.Y. 2025-2026</div>
+            <h3 class="study-load-title">${escapeHtml(user.program || 'Bachelor of Science in Information Technology')}</h3>
             <div class="study-load-meta">
-              <span class="load-pill">Section: <b>${escapeHtml(user.section || 'BLK_BSIT-2A_DAY')}</b></span>
-              <span class="load-pill"><b>10</b> Enrolled Courses</span>
-              <span class="load-pill"><b>28.00</b> Total Academic Units</span>
-              <span class="load-pill status-pill">✓ Officially Enrolled</span>
+              <span class="load-pill">Block: <b>${escapeHtml(user.blockName || user.section || 'BLK_BSIT-2A_DAY')}</b></span>
+              <span class="load-pill"><b id="dashCourseCount">--</b> Enrolled Courses</span>
+              <span class="load-pill"><b id="dashUnitsCount">--</b> Total Academic Units</span>
+              <span class="load-pill status-pill">✓ ${escapeHtml(user.status || 'Officially Enrolled')}</span>
             </div>
           </div>
           <div class="study-load-action">
@@ -766,70 +1249,251 @@ PAGES.dashboard = {
   },
   setup() {
     select('#dashboardLogout').onclick = event => { event.preventDefault(); logout(); };
+
+    // Fetch dynamic load count and units for this specific student's course & year
+    if (window.CtuMis) {
+      const user = currentUser();
+      const prog = user.programCode || user.program || 'BSIT';
+      const yr = user.yearLevel || user.year || 2;
+      window.CtuMis.getCurriculum(prog, yr).then(subs => {
+        if (subs && subs.length) {
+          const countEl = select('#dashCourseCount');
+          const unitsEl = select('#dashUnitsCount');
+          if (countEl) countEl.textContent = subs.length;
+          if (unitsEl) {
+            const total = subs.reduce((sum, s) => sum + (parseFloat(s.unit) || 0), 0);
+            unitsEl.textContent = total.toFixed(2);
+          }
+        }
+      }).catch(() => {});
+    }
   }
 };
 
 /* 5. Book appointment */
 PAGES['book-appointment'] = {
-  render: () => withSidebar(`
-    <h1>Book Appointment</h1>
-    <div class="card">
-      <label for="type">Campus Office & Transaction Type</label>
-      <select id="type">${APPOINTMENT_TYPES.map(t => `<option>${t}</option>`).join('')}</select>
-
-      <div id="officeDocBox" class="doc-checklist-box">
-        <div class="doc-checklist-header">
-          <span class="doc-badge">Required Documents</span>
-          <span id="officeLocationText" class="doc-location"></span>
-        </div>
-        <p class="doc-notice-sub">Please prepare the following required physical documents before arriving for your appointment:</p>
-        <ul id="officeDocList" class="doc-checklist"></ul>
+  render() {
+    const offices = Object.keys(ENROLLMENT_OFFICES);
+    return withSidebar(`
+      <div style="margin-bottom:18px">
+        <span style="font-size:11px;font-weight:700;color:var(--b2);text-transform:uppercase;letter-spacing:1px">Campus Enrollment Services</span>
+        <h1 style="margin:2px 0 6px">Book Appointment</h1>
+        <p class="muted" style="margin:0;font-size:13.5px">Select your destination campus office, specific enrollment service, and preferred schedule.</p>
       </div>
 
-      <label for="date">Appointment date</label>
-      <input type="date" id="date">
-      <label>Available times</label>
-      <div id="slots"></div>
-      <div class="err" id="error-book"></div>
-      <button class="btn" id="continueButton" disabled>Continue to Summary</button>
-    </div>`),
+      <div class="card">
+        <!-- Step 1: Office Selection -->
+        <label for="officeSelect">1. Campus Office / Department</label>
+        <select id="officeSelect" style="font-weight:600">
+          <option value="">-- Choose Campus Office / Department --</option>
+          ${offices.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}
+        </select>
+        <div id="officeDescText" class="muted" style="font-size:12.5px;margin-top:4px;min-height:16px"></div>
+
+        <!-- Step 2: Specific Service Selection -->
+        <div id="serviceContainer" style="margin-top:16px;display:none">
+          <label for="serviceSelect">2. Specific Purpose / Service</label>
+          <select id="serviceSelect">
+            <option value="">-- Select Specific Transaction Purpose --</option>
+          </select>
+        </div>
+
+        <!-- Step 3: Contextual Note / Subject Input -->
+        <div id="noteContainer" style="margin-top:16px;display:none">
+          <label for="studentNote" id="studentNoteLabel">Affected Subject Code(s) or Specific Details (Optional)</label>
+          <input type="text" id="studentNote" placeholder="e.g., CC 103 lab conflicting with MATH 101 lecture" maxlength="160">
+          <div id="studentNoteHint" class="muted" style="font-size:12px;margin-top:4px">
+            Providing subject codes or reference details in advance expedites verification at the window.
+          </div>
+        </div>
+
+        <!-- Step 4: Dynamic Required Documents Checklist & Counter Location -->
+        <div id="officeDocBox" class="doc-checklist-box" style="display:none;margin-top:20px">
+          <div class="doc-checklist-header">
+            <span class="doc-badge" id="serviceBadge">Required Documents</span>
+            <span id="officeLocationText" class="doc-location"></span>
+          </div>
+          <p class="doc-notice-sub" style="margin:4px 0 10px;font-size:12.5px">
+            Please prepare the following required physical documents before arriving for your appointment:
+          </p>
+          <ul id="officeDocList" class="doc-checklist"></ul>
+        </div>
+
+        <!-- Step 5: Date & Slots -->
+        <div id="dateTimeContainer" style="margin-top:20px;display:none">
+          <label for="date">3. Appointment Date</label>
+          <input type="date" id="date">
+          <label style="margin-top:14px">4. Available Time Slots</label>
+          <div id="slots"><p class="muted">Pick a date to see available times.</p></div>
+        </div>
+
+        <div class="err" id="error-book" style="margin-top:12px"></div>
+        <button class="btn" id="continueButton" disabled style="margin-top:20px;width:100%;max-width:280px">Continue to Summary</button>
+      </div>`);
+  },
 
   setup() {
-    const typeSelect = select('#type');
+    const officeSelect = select('#officeSelect');
+    const officeDescText = select('#officeDescText');
+    const serviceContainer = select('#serviceContainer');
+    const serviceSelect = select('#serviceSelect');
+    const noteContainer = select('#noteContainer');
+    const noteInput = select('#studentNote');
+    const noteLabel = select('#studentNoteLabel');
+    const docBox = select('#officeDocBox');
     const locText = select('#officeLocationText');
     const docList = select('#officeDocList');
+    const serviceBadge = select('#serviceBadge');
+    const dateTimeContainer = select('#dateTimeContainer');
+    const continueBtn = select('#continueButton');
 
-    function updateDocChecklist() {
-      const selectedType = typeSelect.value;
-      const details = OFFICE_DETAILS[selectedType];
-      if (details) {
-        locText.textContent = '📍 ' + details.window;
-        docList.innerHTML = details.docs.map(doc => `
-          <li class="doc-item">
-            <span class="doc-check-icon">✓</span>
-            <span>${escapeHtml(doc)}</span>
-          </li>
-        `).join('');
+    // Retrieve previous draft if student pressed "Back" on summary
+    const savedDraft = JSON.parse(sessionStorage.getItem('ee_draft') || 'null');
+
+    let chosenOffice = '';
+    let chosenService = '';
+    let chosenDate = null;
+    let chosenTime = null;
+
+    function renderServicesForOffice(officeName, preselectService = '') {
+      const officeData = ENROLLMENT_OFFICES[officeName];
+      if (!officeData) {
+        serviceContainer.style.display = 'none';
+        noteContainer.style.display = 'none';
+        docBox.style.display = 'none';
+        dateTimeContainer.style.display = 'none';
+        officeDescText.textContent = '';
+        continueBtn.disabled = true;
+        return;
+      }
+
+      officeDescText.textContent = officeData.description || '';
+      serviceSelect.innerHTML = `<option value="">-- Select Specific Transaction Purpose --</option>` +
+        Object.keys(officeData.services).map(srv =>
+          `<option value="${escapeHtml(srv)}"${srv === preselectService ? ' selected' : ''}>${escapeHtml(srv)}</option>`
+        ).join('');
+
+      serviceContainer.style.display = 'block';
+
+      if (preselectService && officeData.services[preselectService]) {
+        serviceSelect.value = preselectService;
+        updateServiceDetails(officeName, preselectService);
+      } else {
+        noteContainer.style.display = 'none';
+        docBox.style.display = 'none';
+        dateTimeContainer.style.display = 'none';
+        continueBtn.disabled = true;
       }
     }
 
-    typeSelect.onchange = updateDocChecklist;
-    updateDocChecklist();
+    function updateServiceDetails(officeName, serviceName) {
+      const officeData = ENROLLMENT_OFFICES[officeName];
+      if (!officeData || !serviceName || !officeData.services[serviceName]) {
+        noteContainer.style.display = 'none';
+        docBox.style.display = 'none';
+        dateTimeContainer.style.display = 'none';
+        continueBtn.disabled = true;
+        return;
+      }
 
-    let chosenDate = null, chosenTime = null;
+      const srvData = officeData.services[serviceName];
+
+      // Update contextual note field
+      noteLabel.textContent = srvData.hint || 'Affected Subject Code(s) or Specific Details (Optional)';
+      noteInput.placeholder = srvData.placeholder || 'e.g., CC 103 conflicting with MATH 101';
+      noteContainer.style.display = 'block';
+
+      // Update document checklist and window location
+      serviceBadge.textContent = `${officeData.prefix} Checklist`;
+      locText.textContent = '📍 ' + (srvData.window || officeData.defaultWindow);
+      docList.innerHTML = (srvData.docs || []).map(doc => `
+        <li class="doc-item">
+          <span class="doc-check-icon">✓</span>
+          <span>${escapeHtml(doc)}</span>
+        </li>
+      `).join('');
+      docBox.style.display = 'block';
+
+      // Show date/time picker
+      dateTimeContainer.style.display = 'block';
+      continueBtn.disabled = !(chosenOffice && chosenService && chosenDate && chosenTime);
+    }
+
+    officeSelect.onchange = () => {
+      chosenOffice = officeSelect.value;
+      chosenService = '';
+      chosenDate = null;
+      chosenTime = null;
+      const dateInput = select('#date');
+      if (dateInput) dateInput.value = '';
+      const slotBox = select('#slots');
+      if (slotBox) slotBox.innerHTML = '<p class="muted">Pick a date to see available times.</p>';
+      continueBtn.disabled = true;
+      clearErrors();
+      renderServicesForOffice(chosenOffice);
+    };
+
+    serviceSelect.onchange = () => {
+      chosenService = serviceSelect.value;
+      clearErrors();
+      updateServiceDetails(chosenOffice, chosenService);
+    };
+
     setupTimePicker(null, (date, time) => {
       chosenDate = date;
       chosenTime = time;
-      select('#continueButton').disabled = !time;
+      continueBtn.disabled = !(chosenOffice && chosenService && chosenDate && chosenTime);
     });
 
-    select('#continueButton').onclick = () => {
-      if (!chosenDate || !chosenTime) return showError('book', 'Select a date and an available time.');
-      sessionStorage.setItem('ee_draft', JSON.stringify({
-        type: typeSelect.value, date: chosenDate, time: chosenTime
-      }));
+    continueBtn.onclick = () => {
+      if (!chosenOffice || !chosenService) {
+        return showError('book', 'Please select both an office and a specific transaction purpose.');
+      }
+      if (!chosenDate || !chosenTime) {
+        return showError('book', 'Select an appointment date and an available time slot.');
+      }
+
+      const draft = {
+        office: chosenOffice,
+        service: chosenService,
+        type: chosenService, // Backwards compatible identifier
+        note: (noteInput.value || '').trim(),
+        date: chosenDate,
+        time: chosenTime
+      };
+
+      sessionStorage.setItem('ee_draft', JSON.stringify(draft));
       goTo('appointment-summary');
     };
+
+    // If returning from summary, restore selected inputs including date and slot
+    if (savedDraft && savedDraft.office && ENROLLMENT_OFFICES[savedDraft.office]) {
+      officeSelect.value = savedDraft.office;
+      chosenOffice = savedDraft.office;
+      chosenService = savedDraft.service || savedDraft.type || '';
+      renderServicesForOffice(chosenOffice, chosenService);
+      if (savedDraft.note) {
+        noteInput.value = savedDraft.note;
+      }
+      if (savedDraft.date) {
+        const dateInput = select('#date');
+        if (dateInput) {
+          dateInput.value = savedDraft.date;
+          dateInput.dispatchEvent(new Event('change'));
+          if (savedDraft.time) {
+            chosenDate = savedDraft.date;
+            chosenTime = savedDraft.time;
+            setTimeout(() => {
+              const matchingSlot = select(`.slot[data-time="${savedDraft.time}"]`);
+              if (matchingSlot && !matchingSlot.disabled) {
+                matchingSlot.classList.add('sel');
+                continueBtn.disabled = false;
+              }
+            }, 60);
+          }
+        }
+      }
+    }
   }
 };
 
@@ -840,16 +1504,31 @@ PAGES['appointment-summary'] = {
     if (!draft) { goTo('book-appointment'); return ''; }
 
     const user = currentUser();
-    const details = OFFICE_DETAILS[draft.type] || {};
-    const qNum = nextQueueNumber(draft.date, draft.type);
+    const details = getOfficeDetails(draft.office || draft.type, draft.service);
+    const qNum = nextQueueNumber(draft.date, draft.office || draft.type, draft.service);
+
+    const summaryDetails = {
+      'Student Name': user ? user.name : 'Enrolled Student',
+      'Student ID': user ? user.sid : '8240873',
+      'Section & Program': `${user ? (user.section || 'BSIT 2-A') : 'BSIT 2-A'} · ${user ? (user.program || 'BSIT') : 'BSIT'}`,
+      'Campus Office': draft.office || details.office || 'Campus Office',
+      'Specific Purpose': draft.service || draft.type,
+      'Appointment Date': formatDate(draft.date),
+      'Scheduled Time': draft.time,
+      'Designated Window': details.window || 'Administration Building'
+    };
+
+    if (draft.note) {
+      summaryDetails['Affected Subjects / Notes'] = draft.note;
+    }
 
     return withSidebar(`
       <h1>Appointment Summary</h1>
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--ln);padding-bottom:14px;margin-bottom:16px;flex-wrap:wrap;gap:12px">
           <div>
-            <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--b2)">Campus Office Visit</span>
-            <h3 style="margin:4px 0 0;font-size:18px">${escapeHtml(draft.type)}</h3>
+            <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--b2)">${escapeHtml(draft.office || 'Campus Office Visit')}</span>
+            <h3 style="margin:4px 0 0;font-size:18px">${escapeHtml(draft.service || draft.type)}</h3>
             <div class="muted" style="font-size:13px;margin-top:2px">📍 ${escapeHtml(details.window || 'Administration Building')}</div>
           </div>
           <div style="text-align:right">
@@ -858,17 +1537,10 @@ PAGES['appointment-summary'] = {
           </div>
         </div>
 
-        ${detailsList({
-          'Student Name': user ? user.name : 'Enrolled Student',
-          'Student ID': user ? user.sid : '2024-00123',
-          'Section': user ? (user.section || 'BSIT 2-A') : 'BSIT 2-A',
-          'Appointment Date': formatDate(draft.date),
-          'Scheduled Time': draft.time,
-          'Designated Window': details.window || 'Administration Building'
-        })}
+        ${detailsList(summaryDetails)}
 
         <h3 class="sec" style="font-size:15px;margin-top:20px;display:flex;align-items:center;gap:6px">
-          📋 <span>Required Documents to Present</span>
+          📋 <span>Required Physical Documents to Present</span>
         </h3>
         <ul style="margin:8px 0 16px;padding-left:20px;line-height:1.7;color:var(--tx);font-size:14px">
           ${(details.docs || ['Valid CTU Student ID Card', 'Pre-Enrollment Advising Slip']).map(d => `<li><b>${escapeHtml(d)}</b></li>`).join('')}
@@ -877,7 +1549,7 @@ PAGES['appointment-summary'] = {
         <div style="background:rgba(59,130,246,0.06);border:1px solid var(--ln);border-radius:8px;padding:12px 14px;margin-bottom:20px">
           <b style="font-size:13px;color:var(--b)">Important Reminder:</b>
           <p style="margin:4px 0 0;font-size:12.5px;color:var(--mu);line-height:1.5">
-            Arrive at the designated office window 15 minutes before your schedule. Bring your physical documents and official CTU Student ID. Your digital queue ticket will be scanned upon arrival.
+            Arrive at <b>${escapeHtml(details.window || 'the designated window')}</b> 15 minutes before your schedule. Bring your physical documents and official CTU Student ID. Your digital queue ticket will be scanned upon arrival.
           </p>
         </div>
 
@@ -899,11 +1571,14 @@ PAGES['appointment-summary'] = {
         showToast('That slot was just taken. Choose another.', true);
         return setTimeout(() => goTo('book-appointment'), 1200);
       }
-      const qNum = nextQueueNumber(draft.date, draft.type);
+      const qNum = nextQueueNumber(draft.date, draft.office || draft.type, draft.service);
       const appointment = {
         id: 'a' + Date.now(),
         sid: loadData('ee_session'),
-        type: draft.type,
+        office: draft.office || 'Campus Office',
+        service: draft.service || draft.type,
+        type: draft.service || draft.type,
+        note: draft.note || '',
         date: draft.date,
         time: draft.time,
         queue: qNum,
@@ -954,18 +1629,25 @@ PAGES['my-schedule'] = {
     const upcoming = active.filter(a => !isPast(a)).sort((a, b) => appointmentDateTime(a) - appointmentDateTime(b));
     const past = active.filter(isPast).sort((a, b) => appointmentDateTime(b) - appointmentDateTime(a));
 
-    const card = (appt, isUpcoming) => `
-      <div class="card ap">
-        <div>
-          <b>${appt.type}</b>
-          <div class="muted">${formatDate(appt.date)} · ${appt.time}${isUpcoming ? ' · Queue ' + appt.queue : ''}</div>
-        </div>
-        <span class="badge ${isUpcoming ? (appt.status === 'Rescheduled' ? 'p' : '') : 'd'}">
-          ${isUpcoming ? appt.status : 'Completed'}</span>
-        ${isUpcoming ? `<div class="row">
-          <button class="btn sm alt" data-details="${appt.id}">View Details</button>
-          <button class="btn sm" data-reschedule="${appt.id}">Reschedule</button></div>` : ''}
-      </div>`;
+    const card = (appt, isUpcoming) => {
+      const details = getOfficeDetails(appt.office || appt.type, appt.service);
+      const displayOffice = appt.office || details.office || 'Campus Office';
+      const displayService = appt.service || appt.type;
+      return `
+        <div class="card ap">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--b2);text-transform:uppercase;letter-spacing:0.5px">${escapeHtml(displayOffice)}</div>
+            <b style="font-size:15px">${escapeHtml(displayService)}</b>
+            ${appt.note ? `<div style="font-size:12.5px;color:var(--mu);margin-top:2px">Ref: <i>${escapeHtml(appt.note)}</i></div>` : ''}
+            <div class="muted" style="font-size:13px;margin-top:3px">${formatDate(appt.date)} · ${appt.time}${isUpcoming ? ' · Queue <b style="color:var(--b)">' + appt.queue + '</b>' : ''}</div>
+          </div>
+          <span class="badge ${isUpcoming ? (appt.status === 'Rescheduled' ? 'p' : '') : 'd'}">
+            ${isUpcoming ? appt.status : 'Completed'}</span>
+          ${isUpcoming ? `<div class="row">
+            <button class="btn sm alt" data-details="${appt.id}">View Details</button>
+            <button class="btn sm" data-reschedule="${appt.id}">Reschedule</button></div>` : ''}
+        </div>`;
+    };
 
     return withSidebar(`
       <h1>My Schedule</h1>
@@ -980,19 +1662,27 @@ PAGES['my-schedule'] = {
     document.querySelectorAll('[data-details]').forEach(button => {
       button.onclick = () => {
         const appt = allAppointments().find(a => a.id === button.dataset.details);
-        const details = OFFICE_DETAILS[appt.type] || {};
+        if (!appt) return;
+        const details = getOfficeDetails(appt.office || appt.type, appt.service);
+        const modalDetails = {
+          'Campus Office': appt.office || details.office || 'Campus Office',
+          'Transaction': appt.service || appt.type,
+          'Date': formatDate(appt.date),
+          'Time': appt.time,
+          'Status': appt.status,
+          'Designated Window': details.window || 'Administration Building'
+        };
+        if (appt.note) {
+          modalDetails['Subject / Details'] = appt.note;
+        }
+
         const popup = showModal(`
           <div style="text-align:center;margin-bottom:12px">
             <span style="font-size:11px;font-weight:700;color:var(--b2);letter-spacing:1px;text-transform:uppercase">Campus Queue Ticket</span>
             <div style="font-size:36px;font-weight:900;color:var(--b2);letter-spacing:1px;margin:2px 0">${appt.queue}</div>
             <div style="font-size:12.5px;color:var(--tx);font-weight:600">📍 ${escapeHtml(details.window || 'Administration Building')}</div>
           </div>
-          ${detailsList({
-            'Transaction': appt.type,
-            'Date': formatDate(appt.date),
-            'Time': appt.time,
-            'Status': appt.status
-          })}
+          ${detailsList(modalDetails)}
           <div style="margin-top:14px;padding:10px 12px;background:rgba(59,130,246,0.06);border-radius:6px;font-size:12px;color:var(--mu)">
             <b style="color:var(--tx)">Required to bring:</b> ${(details.docs || ['Valid CTU Student ID Card']).join(', ')}
           </div>
@@ -1025,19 +1715,29 @@ PAGES.reschedule = {
     const appt = allAppointments().find(a => a.id === sessionStorage.getItem('ee_reschedule_id'));
     if (!appt) { goTo('my-schedule'); return ''; }
 
+    const reschedDetails = {
+      'Campus Office': appt.office || 'Campus Office',
+      'Transaction Purpose': appt.service || appt.type,
+      'Current Date': formatDate(appt.date),
+      'Current Time': appt.time,
+      'Current Queue Ticket': appt.queue
+    };
+    if (appt.note) {
+      reschedDetails['Subject / Reference'] = appt.note;
+    }
+
     return withSidebar(`
       <h1>Reschedule Appointment</h1>
       <div class="card">
-        <h3>Current appointment</h3>
-        ${detailsList({ 'Type': appt.type, 'Date': formatDate(appt.date),
-                        'Time': appt.time, 'Queue number': appt.queue })}
+        <h3>Current Appointment</h3>
+        ${detailsList(reschedDetails)}
       </div>
       <div class="card sec">
-        <label for="date">New date</label>
+        <label for="date">Select New Date</label>
         <input type="date" id="date">
-        <label>New available time</label>
+        <label style="margin-top:14px">Select New Available Time</label>
         <div id="slots"></div>
-        <div class="row">
+        <div class="row" style="margin-top:18px">
           <button class="btn alt" id="cancelButton">Cancel</button>
           <button class="btn" id="saveButton" disabled>Confirm New Schedule</button>
         </div>
@@ -1062,15 +1762,19 @@ PAGES.reschedule = {
     select('#saveButton').onclick = () => {
       const list = allAppointments();
       const appt = list.find(a => a.id === id);
+      if (!appt) return;
       appt.date = newDate;
       appt.time = newTime;
-      appt.queue = nextQueueNumber(newDate, appt.type);
+      appt.queue = nextQueueNumber(newDate, appt.office || appt.type, appt.service);
       appt.status = 'Rescheduled';
       saveData('ee_appointments', list);
       saveData('ee_last', id);
       const user = currentUser();
       if (user) {
         syncToAdminDashboard(appt, user);
+      }
+      if (window.EnrollEaseCloud) {
+        window.EnrollEaseCloud.saveAppointment(appt);
       }
       sessionStorage.removeItem('ee_reschedule_id');
       goTo('reschedule-confirmation');
@@ -1169,8 +1873,8 @@ PAGES.enrollment = {
           <div class="ctu-student-info-row">
             <div class="ctu-info-item"><span class="lbl">ID Number :</span> <span class="val font-mono">${escapeHtml(user.sid)}</span></div>
             <div class="ctu-info-item"><span class="lbl">Name :</span> <span class="val">${escapeHtml(user.name.toUpperCase())}</span></div>
-            <div class="ctu-info-item"><span class="val">${escapeHtml(user.program && user.program.includes('IT') ? 'BSIT 2' : (user.year || 'BSIT 2'))}</span></div>
-            <div class="ctu-block-name" id="ctuBlockDisplay">${escapeHtml(blockName)}</div>
+            <div class="ctu-info-item"><span class="val" id="ctuProgDisplay">${escapeHtml((user.programCode || 'BSIT') + ' ' + (user.yearLevel || (user.year ? user.year[0] : '2')))}</span></div>
+            <div class="ctu-block-name" id="ctuBlockDisplay">${escapeHtml(user.blockName || blockName)}</div>
           </div>
 
           <!-- Dual Column Tables: Subjects on Left (73%), Fees on Right (27%) -->
@@ -1264,12 +1968,12 @@ PAGES.enrollment = {
     // Dynamic Query to CTU Central MIS Cloud Database
     if (window.CtuMis) {
       const user = currentUser();
-      const progCode = (user.program && user.program.toUpperCase().includes('CS')) ? 'BSCS' : 'BSIT';
-      const yrLevel = (user.year && user.year.includes('1')) ? 1 : 2;
+      const prog = user.programCode || user.program || 'BSIT';
+      const yr = user.yearLevel || user.year || 2;
 
       Promise.all([
-        window.CtuMis.getCurriculum(progCode, yrLevel),
-        window.CtuMis.getFees(progCode, yrLevel),
+        window.CtuMis.getCurriculum(prog, yr),
+        window.CtuMis.getFees(prog, yr),
         window.CtuMis.getStudent(user.sid)
       ]).then(([remoteSubjects, remoteFees, masterStudent]) => {
         if (remoteSubjects && remoteSubjects.length) {
@@ -1307,9 +2011,15 @@ PAGES.enrollment = {
           }
         }
 
-        if (masterStudent && masterStudent.block_name) {
-          const blockEl = select('#ctuBlockDisplay');
-          if (blockEl) blockEl.textContent = masterStudent.block_name;
+        if (masterStudent) {
+          if (masterStudent.block_name) {
+            const blockEl = select('#ctuBlockDisplay');
+            if (blockEl) blockEl.textContent = masterStudent.block_name;
+          }
+          if (masterStudent.program_code) {
+            const progEl = select('#ctuProgDisplay');
+            if (progEl) progEl.textContent = `${masterStudent.program_code} ${masterStudent.year_level || ''}`;
+          }
         }
       }).catch(err => {
         console.warn('Live MIS fetch notice (using cached load):', err);
@@ -1523,7 +2233,7 @@ const needsLogin = !PAGES_WITHOUT_LOGIN.includes(currentPage);
 if (needsLogin && !loggedIn) {
   flashMessage('Please log in to continue.');
   goTo('login');
-} else if (loggedIn && (currentPage === 'login' || currentPage === 'register')) {
+} else if (loggedIn && currentPage === 'register') {
   goTo('dashboard');
 } else {
   const page = PAGES[currentPage];
