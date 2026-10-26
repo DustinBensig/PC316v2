@@ -356,12 +356,6 @@ h1 {
     padding-left: 2px;
 }
 
-.arrow-circle {
-    width: 30px;
-    height: 30px;
-    font-size: 13px;
-}
-
 .schedule-card {
     display: flex;
     align-items: center;
