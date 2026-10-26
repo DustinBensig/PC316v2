@@ -134,9 +134,9 @@ body {
 
     display: inline-block;
     color: white;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 600;
-    margin-bottom: 8px;
+    margin-bottom: 15px;
 
 
 }
@@ -145,10 +145,10 @@ body {
 
 .left-panel h1 {
     color: white;
-    font-size: 16px;
+    font-size: 18px;
     line-height: 1.15;
     font-weight: 700;
-    margin-bottom: 9px;
+    margin-bottom: 25px;
     letter-spacing: 0.5px;
 }
 
@@ -172,7 +172,7 @@ body {
 
     gap: 10px;
 
-    margin-bottom: 12px;
+    margin-bottom: 17px;
 }
 
 
@@ -201,7 +201,7 @@ body {
 
     color: white;
 
-    font-size: 9px;
+    font-size: 11px;
 
     line-height: 1.15;
 
@@ -212,7 +212,7 @@ body {
 
     color: rgba(255, 255, 255, 0.88);
 
-    font-size: 9px;
+    font-size: 10px;
     line-height: 1.25;
     margin-top: 3px;
 }
@@ -302,16 +302,16 @@ body {
 
     color: white;
 
-    font-size: 20px;
+    font-size: 12px;
 
     transition: 0.2s ease;
 }
 
 .input-group input:focus {
 
-    background: rgba(255, 255, 255, 0.23);
+    background: rgba(230, 230, 235, 0.393);
 
-    border-color: white;
+    border-color: rgb(25, 8, 255);
 
     box-shadow:
         0 0 0 2px rgba(255, 255, 255, 0.15);
@@ -358,7 +358,7 @@ body {
 
     font-size: 10px;
 
-    font-weight: 600;
+    font-weight: 500;
 
     cursor: pointer;
 
