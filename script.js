@@ -544,20 +544,28 @@ function syncToAdminDashboard(appt, user) {
 
     const adminAppt = {
       id: `EA-${appt.id.slice(-4)}`,
+      refId: appt.id,
+      queue: appt.queue || 'Q-001',
       student: user.name,
       studentId: user.sid,
-      program: user.program,
+      email: user.email || '',
+      program: user.program || 'BSIT',
       department: targetDept,
+      office: appt.office || details.office || 'Campus Office',
+      service: appt.service || appt.type || 'General Transaction',
+      note: appt.note || '',
+      docs: details.docs || ['Valid CTU Student ID Card'],
+      window: details.window || 'Administration Building',
       date: appt.date,
       time: appt.time,
-      status: 'Pending',
+      status: appt.status || 'Pending',
       clinic: 'Cleared',
       guidance: 'Cleared',
       payment: 'Paid',
       registrar: 'Completed',
       documents: 'Verified'
     };
-    saveData('enrolle_admin_appointments', [adminAppt, ...adminAppts.filter(a => a.id !== adminAppt.id)]);
+    saveData('enrolle_admin_appointments', [adminAppt, ...adminAppts.filter(a => a.id !== adminAppt.id && a.refId !== appt.id)]);
 
     const adminStudents = loadData('enrolle_admin_students', {});
     adminStudents[user.sid] = {
@@ -582,7 +590,7 @@ function syncFromAdminDashboard() {
 
     let modified = false;
     studentAppts.forEach(sa => {
-      const match = adminAppts.find(aa => aa.id === `EA-${sa.id.slice(-4)}` || (aa.studentId === sa.sid && aa.date === sa.date && aa.time === sa.time));
+      const match = adminAppts.find(aa => aa.refId === sa.id || aa.id === `EA-${sa.id.slice(-4)}` || (aa.studentId === sa.sid && aa.date === sa.date && aa.time === sa.time));
       if (match && match.status && match.status !== sa.status) {
         sa.status = match.status;
         modified = true;
@@ -1077,7 +1085,7 @@ PAGES.login = {
       <a href="#" id="forgotLink">Forgot password?</a><br><br>
       <button class="btn" style="width:100%">Login</button>
       <p class="center">No account yet? <a href="register.html">Register</a></p>
-      <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin sign in</a></p>
+      <p class="center admin-login-option muted" style="margin-top:20px;font-size:12px;opacity:0.85;">CTU Faculty or Staff? <a href="admin-login/admin-login.html" style="text-decoration:underline;">Staff Portal</a></p>
     </form></div>`;
   },
 

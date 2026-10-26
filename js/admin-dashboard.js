@@ -72,8 +72,17 @@
     { message: "<strong>Clinic</strong> marked a medical clearance as pending.", time: "36 minutes ago", department: "Clinic" },
     { message: "<strong>Cashier</strong> recorded a student payment.", time: "1 hour ago", department: "Cashier" }
   ]);
-  let role = sessionStorage.getItem("enrolle_admin_authenticated_role") || load("enrolle_admin_role", "MIS");
-  if (!roleNames[role]) role = "MIS";
+  // Strict Route Guard: Require authenticated session from admin login
+  const authenticatedRole = sessionStorage.getItem("enrolle_admin_authenticated_role");
+  if (!authenticatedRole || !roleNames[authenticatedRole]) {
+    sessionStorage.removeItem("enrolle_admin_authenticated_role");
+    sessionStorage.removeItem("enrolle_admin_authenticated_name");
+    sessionStorage.removeItem("enrolle_admin_authenticated_email");
+    localStorage.removeItem("enrolle_admin_role");
+    window.location.replace("admin-login/admin-login.html?auth=required");
+    return;
+  }
+  let role = authenticatedRole;
   let activeSection = "dashboard";
   let searchQuery = "";
   let statusFilter = "All statuses";
@@ -273,9 +282,25 @@
     const showOfficeStatus = !compact && (role === "MIS" || hasPermission("documents.verify.assigned"));
     const officeLabel = role === "MIS" ? "Registrar" : "Documents";
     const officeStatus = role === "MIS" ? "registrar" : "documents";
-    return `<div class="table-wrap"><table><thead><tr><th>Student</th><th>Department</th><th>Date & time</th><th>Status</th>${showOfficeStatus ? `<th>${officeLabel}</th>` : ""}<th></th></tr></thead><tbody>${items.map((item) => `<tr>
-      <td><div class="student-cell"><span class="mini-avatar">${initials(item.student)}</span><span><span class="student-name">${escapeHtml(item.student)}</span><span class="student-id">${escapeHtml(item.studentId)}</span></span></div></td>
-      <td>${escapeHtml(item.department)}</td><td>${readableDate(item.date)} · ${escapeHtml(item.time)}</td><td>${statusPill(item.status)}</td>
+    return `<div class="table-wrap"><table><thead><tr>
+      <th style="width:95px">Ticket</th>
+      <th>Student</th>
+      <th>Office / Dept</th>
+      <th>Transaction & Notes</th>
+      <th>Date & Time</th>
+      <th>Status</th>
+      ${showOfficeStatus ? `<th>${officeLabel}</th>` : ""}
+      <th>Action</th>
+    </tr></thead><tbody>${items.map((item) => `<tr>
+      <td><span class="ticket-tag font-mono"><strong>${escapeHtml(item.queue || item.id)}</strong></span></td>
+      <td><div class="student-cell"><span class="mini-avatar">${initials(item.student)}</span><span><span class="student-name">${escapeHtml(item.student)}</span><span class="student-id">${escapeHtml(item.studentId)}${item.program ? ` · ${escapeHtml(item.program)}` : ''}</span></span></div></td>
+      <td><span class="dept-pill">${escapeHtml(item.department)}</span></td>
+      <td style="white-space:normal;max-width:260px">
+        <strong style="color:var(--ink);font-size:12px;display:block">${escapeHtml(item.service || item.department)}</strong>
+        ${item.note ? `<div class="admin-note-snippet" title="${escapeHtml(item.note)}">📝 <em>${escapeHtml(item.note)}</em></div>` : '<span style="color:#a0aec0;font-size:11px">General Transaction</span>'}
+      </td>
+      <td><div style="font-weight:600">${readableDate(item.date)}</div><div style="color:var(--muted);font-size:11px">${escapeHtml(item.time)}</div></td>
+      <td>${statusPill(item.status)}</td>
       ${showOfficeStatus ? `<td>${statusPill(item[officeStatus])}</td>` : ""}
       <td>${rowAction(item)}</td></tr>`).join("")}</tbody></table></div>`;
   }
@@ -545,28 +570,19 @@
     toastTimer = setTimeout(() => toast.remove(), 3000);
   }
 
-  async function signOut() {
-    const isAuthenticated = Boolean(sessionStorage.getItem("enrolle_admin_authenticated_role"));
-    if (isAuthenticated) {
-      try {
-        const response = await fetch("api/admin/logout.php", { method: "POST", credentials: "same-origin", headers: { "Accept": "application/json" } });
-        if (!response.ok) throw new Error("The sign-out service could not end your server session. Please try again.");
-      } catch (error) {
-        showToast(error instanceof TypeError ? "Cannot reach the PHP sign-out service. Your session is still active." : error.message);
-        return;
-      }
-    }
+  function signOut() {
     const loginPages = {
       MIS: "admin-login/mis-admin-login.html", SSG: "admin-login/ssg-admin-login.html", CodeTech: "admin-login/codetech-admin-login.html",
       COED: "admin-login/coed-admin-login.html", HM: "admin-login/hm-admin-login.html", BIT: "admin-login/bit-admin-login.html",
       Registrar: "admin-login/registrar-admin-login.html", Clinic: "admin-login/clinic-admin-login.html",
       Cashier: "admin-login/cashier-admin-login.html", Guidance: "admin-login/guidance-admin-login.html"
     };
+    const targetUrl = (loginPages[role] || "admin-login/admin-login.html") + "?logged_out=1";
     sessionStorage.removeItem("enrolle_admin_authenticated_role");
     sessionStorage.removeItem("enrolle_admin_authenticated_name");
     sessionStorage.removeItem("enrolle_admin_authenticated_email");
     localStorage.removeItem("enrolle_admin_role");
-    window.location.assign(loginPages[role] || "admin-login/admin-login.html");
+    window.location.replace(targetUrl);
   }
 
   function openModal(title, subtitle, fields, onSubmit) {
@@ -641,14 +657,29 @@
   function openStudent(id) {
     const item = scoped().find((appointment) => appointment.id === id);
     if (!item) return showToast("This record is outside your department access.");
-    const fields = [["Student ID", item.studentId], ["Program", item.program], ["Department", item.department]];
-    if (role === "MIS" || hasPermission("appointments.read.assigned")) fields.push(["Appointment", `${readableDate(item.date)} · ${item.time}`], ["Appointment status", item.status]);
+    const fields = [
+      ["Queue Ticket", item.queue || item.id],
+      ["Student ID", item.studentId],
+      ["Student Name", item.student],
+      ["Program", item.program || "Undergraduate"],
+      ["Assigned Department", item.department],
+      ["Specific Transaction", item.service || item.department],
+      ["Appointment Schedule", `${readableDate(item.date)} · ${item.time}`],
+      ["Appointment Status", item.status]
+    ];
+    if (item.note) {
+      fields.push(["Student Reason / Notes", item.note]);
+    }
+    if (item.docs && item.docs.length) {
+      fields.push(["Required Documents", Array.isArray(item.docs) ? item.docs.join(", ") : String(item.docs)]);
+    }
     if (role === "MIS" || hasPermission("documents.verify.assigned") || hasPermission("documents.review")) fields.push(["Documents", item.documents]);
     if (role === "MIS" || role === "Registrar") fields.push(["Enrollment record", item.registrar]);
     if (role === "MIS" || role === "Clinic") fields.push(["Medical clearance", item.clinic]);
     if (role === "MIS" || role === "Guidance") fields.push(["Guidance clearance", item.guidance]);
     if (role === "MIS" || role === "Cashier") fields.push(["Payment", item.payment]);
-    openModal(item.student, `${item.studentId} · ${item.department}`, `<div class="detail-grid">${fields.map(([label, value]) => `<div class="detail-tile"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>`, (_form, overlay) => overlay.remove());
+
+    openModal(item.student, `${item.queue || item.id} · ${item.studentId} · ${item.department}`, `<div class="detail-grid">${fields.map(([label, value]) => `<div class="detail-tile ${label === 'Student Reason / Notes' || label === 'Required Documents' ? 'full-width highlight' : ''}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>`, (_form, overlay) => overlay.remove());
     const submit = document.querySelector("#admin-modal [type='submit']");
     if (submit) { submit.textContent = "Done"; submit.addEventListener("click", (event) => { event.preventDefault(); document.querySelector(".overlay")?.remove(); }); }
   }

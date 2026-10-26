@@ -64,3 +64,38 @@ input:focus { border-color: #97a9ff; outline: 3px solid rgb(71 105 235 / 12%); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+
+.back-to-student-wrap {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+  text-align: center;
+}
+.admin-nav-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.back-to-student-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  transition: all .15s ease;
+}
+.back-to-student-link:hover {
+  background: #e2e8f0;
+  color: var(--blue-dark);
+}
