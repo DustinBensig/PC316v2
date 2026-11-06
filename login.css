@@ -210,6 +210,13 @@ body {
     cursor: pointer;
 }
 
+.error,
+.err {
+    display: block;
+    color: #ffb3b3;
+    font-size: 12px;
+}
+
 /* REMEMBER ME AND FORGOT PASSWORD */
 
 .form-options {
@@ -276,6 +283,20 @@ body {
 .login-btn i {
     font-size: 13px;
     margin-left: 3px;
+}
+
+.admin-login-option {
+    margin: 16px 0 0 6px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    text-align: center;
+}
+
+.admin-login-option a {
+    color: white;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 /* SMALL SCREENS */

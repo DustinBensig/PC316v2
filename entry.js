@@ -20,6 +20,13 @@
     return;
   }
 
+  if (currentUrl.pathname.includes('/admin-login/')) return;
+
+  if (currentFile === 'admin-dashboard.html') {
+    location.replace(new URL('admin/dashboard.php', currentUrl.href).href);
+    return;
+  }
+
   if (currentFile === 'index.html') return;
 
   let approved = false;

@@ -104,7 +104,7 @@
                         Fill in your details to create your account.
                     </p>
 
-                    <form>
+                    <form id="registerForm" novalidate>
 
                         <!-- Row 1 -->
                         <div class="form-row">
@@ -112,13 +112,11 @@
                             <div class="input-group">
                                 <label>Full Name</label>
 
-                                <input type="text">
+                                <input id="regName" name="name" type="text" autocomplete="name" required>
                             </div>
-
                             <div class="input-group">
-                                <label>Student ID Number</label>
-
-                                <input type="text">
+                                <label for="regProgram">Program</label>
+                                <input id="regProgram" name="program" type="text" maxlength="150" required>
                             </div>
 
                         </div>
@@ -130,13 +128,13 @@
                             <div class="input-group">
                                 <label>Email Address</label>
 
-                                <input type="email">
+                                <input id="regEmail" name="email" type="email" autocomplete="email" required>
                             </div>
 
                             <div class="input-group">
                                 <label>Phone Number</label>
 
-                                <input type="tel">
+                                <input id="regPhone" name="phone" type="tel" autocomplete="tel">
                             </div>
 
                         </div>
@@ -148,7 +146,7 @@
                             <div class="input-group password-group">
                                 <label>Password</label>
 
-                                <input type="password">
+                                <input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="8" required>
 
                                 <i class="fa-solid fa-eye password-eye"></i>
                             </div>
@@ -156,16 +154,19 @@
                             <div class="input-group password-group">
                                 <label>Confirm Password</label>
 
-                                <input type="password">
+                                <input id="regConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
 
                                 <i class="fa-solid fa-eye password-eye"></i>
                             </div>
 
                         </div>
 
+                        <p class="form-subtitle">Your Student ID is generated automatically. The Registrar verifies your year level and status.</p>
+
+                        <p id="registerMessage" role="alert" aria-live="polite"></p>
 
                         <!-- Submit -->
-                        <button type="submit" class="create-button">
+                        <button type="submit" class="create-button" id="registerSubmit">
 
                             <span>Create Account</span>
 
@@ -183,5 +184,7 @@
 
     </div>
 
+    <script src="entry.js"></script>
+    <script src="js/student-auth.js"></script>
 </body>
 </html>

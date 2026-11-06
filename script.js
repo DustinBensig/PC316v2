@@ -593,7 +593,7 @@ PAGES.login = {
       <a href="#" id="forgotLink">Forgot password?</a><br><br>
       <button class="btn" style="width:100%">Login</button>
       <p class="center">No account yet? <a href="register.html">Register</a></p>
-      <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin sign in</a></p>
+      <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin Login</a></p>
     </form></div>`,
 
   setup() {

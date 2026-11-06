@@ -4,83 +4,16 @@
    This file looks at data-page and draws that page's content.
 
    HOW TO EDIT:
-   - Change appointment types / time slots in section 1.
+   - Enrollment eligibility and available appointment slots are managed by the backend.
    - Each page lives in section 6 as PAGES.<name> with two functions:
        render() -> returns the page's HTML
        setup()  -> attaches button clicks and form logic after drawing
-   - All data is saved in the browser (localStorage). Nothing leaves it.
+   - Student accounts and enrollment appointments are verified by the PHP API.
+   - localStorage is only used for display preferences and a profile cache.
    ===================================================================== */
 
 
 /* ---------- 1. SETTINGS ---------- */
-const APPOINTMENT_TYPES = [
-  "Registrar's Office (Document Evaluation & COR Release)",
-  "Cashier & Accounting (Assessment & Payment)",
-  "Campus Health Services (Clinic Medical Clearance)",
-  "Guidance & Counseling (Clearance & Good Moral)",
-  "Department Advising (Program Head & Subject Loading)"
-];
-
-const OFFICE_DETAILS = {
-  "Registrar's Office (Document Evaluation & COR Release)": {
-    dept: "Registrar",
-    prefix: "REG",
-    window: "Registrar Windows 1 & 2 (Administration Building)",
-    docs: [
-      "Signed Pre-Enrollment Advising Sheet",
-      "Previous Semester Official Grade Slip",
-      "Valid CTU Student ID Card",
-      "Official Clearance Slip"
-    ]
-  },
-  "Cashier & Accounting (Assessment & Payment)": {
-    dept: "Cashier",
-    prefix: "CSH",
-    window: "Cashier Windows 3 & 4 (Administration Building)",
-    docs: [
-      "Encoded Assessment Form",
-      "Validated Assessment Slip",
-      "Valid CTU Student ID Card",
-      "Official Receipt Slip (if paying balance)"
-    ]
-  },
-  "Campus Health Services (Clinic Medical Clearance)": {
-    dept: "Clinic",
-    prefix: "CLN",
-    window: "Clinic Windows 1 & 2 (Health Services Building)",
-    docs: [
-      "Annual Physical Examination Form",
-      "Signed Health Declaration Slip",
-      "Chest X-Ray / Laboratory Result Slip",
-      "Valid CTU Student ID Card"
-    ]
-  },
-  "Guidance & Counseling (Clearance & Good Moral)": {
-    dept: "Guidance",
-    prefix: "GDC",
-    window: "Student Affairs & Guidance Office (Room 204)",
-    docs: [
-      "Student Conduct & Good Moral Application Slip",
-      "Student Handbook Clearance Form",
-      "Valid CTU Student ID Card"
-    ]
-  },
-  "Department Advising (Program Head & Subject Loading)": {
-    dept: "CodeTech",
-    prefix: "ADV",
-    window: "Department Head Office (Faculty Building)",
-    docs: [
-      "Curriculum Checklist Slip (BSIT 2nd Year)",
-      "Previous Semester Grade Evaluation Form",
-      "Pre-Enrollment Advising Sheet"
-    ]
-  }
-};
-
-const TIME_SLOTS = [
-  '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
-  '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM'
-];
 const PAGES_WITHOUT_LOGIN = ['index', 'login', 'register'];
 const currentPage = document.body.dataset.page;
 
@@ -98,90 +31,52 @@ function saveData(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-// A demo account so you can log in right away.
-let users = loadData('ee_users');
-if (!users || !Array.isArray(users) || users.length === 0 || !users.some(u => u.sid === '2024-00123')) {
-  const demoUser = {
-    name: 'Juan Dela Cruz', sid: '2024-00123', email: 'juan@student.edu',
-    password: 'demo1234', contact: '0917 123 4567',
-    program: 'BS Information Technology', year: '2nd Year', section: 'BSIT 2-A', enrolled: '2024-06-10',
-    status: 'Regular / Officially Enrolled'
-  };
-  users = Array.isArray(users) ? [...users.filter(u => u.sid !== '2024-00123'), demoUser] : [demoUser];
-  saveData('ee_users', users);
+function clearStudentSession() {
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem('ee_session');
+    storage.removeItem('ee_csrf');
+  }
 }
+
+function initializeStudentSessionStorage() {
+  if (!sessionStorage.getItem('ee_session') && localStorage.getItem('ee_session')) {
+    sessionStorage.setItem('ee_session', localStorage.getItem('ee_session'));
+  }
+  if (!sessionStorage.getItem('ee_csrf') && localStorage.getItem('ee_csrf')) {
+    sessionStorage.setItem('ee_csrf', localStorage.getItem('ee_csrf'));
+  }
+  localStorage.removeItem('ee_session');
+  localStorage.removeItem('ee_csrf');
+}
+
+initializeStudentSessionStorage();
+
+async function studentFetch(resource, options) {
+  const response = await fetch(resource, options);
+  if (response.status === 401) clearStudentSession();
+  return response;
+}
+
 // Dark / light mode
 document.documentElement.dataset.theme = loadData('ee_theme', 'light');
 
+const savedProfiles = loadData('ee_users', []);
+if (Array.isArray(savedProfiles) && savedProfiles.some(user =>
+  user && typeof user === 'object' && Object.prototype.hasOwnProperty.call(user, 'password')
+)) {
+  saveData('ee_users', savedProfiles.map(user => {
+    if (!user || typeof user !== 'object') return user;
+    const { password, ...profile } = user;
+    return profile;
+  }));
+  clearStudentSession();
+}
+
 function allUsers()        { return loadData('ee_users', []); }
 function allAppointments() { return loadData('ee_appointments', []); }
-function currentUser()     {
-  const user = allUsers().find(u => u.sid === loadData('ee_session'));
-  if (user && !user.section) {
-    user.section = user.program && user.program.toLowerCase().includes('information technology') ? 'BSIT 2-A' : 'Section 2-A';
-  }
-  return user;
-}
+function currentUser()     { return allUsers().find(u => u.sid === sessionStorage.getItem('ee_session')); }
 function myAppointments()  {
-  syncFromAdminDashboard();
-  return allAppointments().filter(a => a.sid === loadData('ee_session'));
-}
-
-/* Two-Way Sync between Student Bookings and Admin Dashboard */
-function syncToAdminDashboard(appt, user) {
-  try {
-    const adminAppts = loadData('enrolle_admin_appointments', []);
-    const deptInfo = OFFICE_DETAILS[appt.type] || { dept: 'Registrar' };
-    const adminAppt = {
-      id: `EA-${appt.id.slice(-4)}`,
-      student: user.name,
-      studentId: user.sid,
-      program: user.program,
-      department: deptInfo.dept,
-      date: appt.date,
-      time: appt.time,
-      status: 'Pending',
-      clinic: 'Cleared',
-      guidance: 'Cleared',
-      payment: 'Paid',
-      registrar: 'Completed',
-      documents: 'Verified'
-    };
-    saveData('enrolle_admin_appointments', [adminAppt, ...adminAppts.filter(a => a.id !== adminAppt.id)]);
-
-    const adminStudents = loadData('enrolle_admin_students', {});
-    adminStudents[user.sid] = {
-      studentId: user.sid,
-      name: user.name,
-      email: user.email,
-      program: user.program,
-      homeDepartment: deptInfo.dept === 'Registrar' || deptInfo.dept === 'Cashier' ? 'CodeTech' : deptInfo.dept,
-      active: true
-    };
-    saveData('enrolle_admin_students', adminStudents);
-  } catch (e) {
-    console.warn('Sync to admin error:', e);
-  }
-}
-
-function syncFromAdminDashboard() {
-  try {
-    const adminAppts = loadData('enrolle_admin_appointments', []);
-    const studentAppts = loadData('ee_appointments', []);
-    if (!adminAppts.length || !studentAppts.length) return;
-
-    let modified = false;
-    studentAppts.forEach(sa => {
-      const match = adminAppts.find(aa => aa.id === `EA-${sa.id.slice(-4)}` || (aa.studentId === sa.sid && aa.date === sa.date && aa.time === sa.time));
-      if (match && match.status && match.status !== sa.status) {
-        sa.status = match.status;
-        modified = true;
-      }
-    });
-    if (modified) {
-      saveData('ee_appointments', studentAppts);
-    }
-  } catch (e) {}
+  return allAppointments().filter(a => a.sid === sessionStorage.getItem('ee_session'));
 }
 
 
@@ -193,7 +88,7 @@ const studentInitials = name => (name || 'Student').trim().split(/\s+/).map(p =>
 function getCurriculumSubjects(program = '', year = '', section = '') {
   const prog = (program || '').toLowerCase();
   const yr = (year || '').toLowerCase();
-  const sec = section || (prog.includes('it') || prog.includes('information') ? 'BSIT 2-A' : 'Section 2-A');
+  const sec = section || '';
 
   if (prog.includes('computer science') || prog.includes('bscs')) {
     return [
@@ -285,10 +180,11 @@ function formatDate(dateString) {
 
 // Real Date object of an appointment (needed to know if it is in the past).
 function appointmentDateTime(appt) {
-  const hour12 = parseInt(appt.time.slice(0, 2), 10) % 12;
-  const hour24 = hour12 + (appt.time.endsWith('PM') ? 12 : 0);
-  const minutes = appt.time.slice(3, 5);
-  return new Date(appt.date + 'T' + String(hour24).padStart(2, '0') + ':' + minutes + ':00');
+  const time = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(appt.time);
+  if (!time) return new Date(NaN);
+  const hour12 = Number(time[1]) % 12;
+  const hour24 = hour12 + (time[3].toUpperCase() === 'PM' ? 12 : 0);
+  return new Date(appt.date + 'T' + String(hour24).padStart(2, '0') + ':' + time[2] + ':00');
 }
 
 function isPast(appt) {
@@ -321,9 +217,16 @@ function showModal(html) {
 }
 
 function logout() {
-  localStorage.removeItem('ee_session');
-  flashMessage('You have been logged out.');
-  goTo('login');
+  studentFetch('api/student/logout.php', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': sessionStorage.getItem('ee_csrf') || '' }
+  }).catch(() => {
+    showToast('Could not contact the server to end your session.', true);
+  }).finally(() => {
+    clearStudentSession();
+    flashMessage('You have been logged out.');
+    goTo('login');
+  });
 }
 
 
@@ -338,12 +241,32 @@ function inputField(id, label, type = 'text', value = '', extra = '') {
 
 // Put a red message under a field. Always returns false (= "not valid").
 function showError(fieldId, message) {
-  select('#error-' + fieldId).textContent = message;
+  const errorId = 'error-' + fieldId;
+  const errorElement = select('#' + errorId);
+  if (errorElement) {
+    errorElement.textContent = message;
+  } else {
+    console.warn('Missing error element #' + errorId);
+    const field = select('#' + fieldId);
+    const fallback = document.createElement('div');
+    fallback.className = 'err';
+    fallback.setAttribute('role', 'alert');
+    fallback.dataset.errorFallback = fieldId;
+    fallback.textContent = message;
+    const anchor = field && field.closest('.input-box, .input-group');
+    if (anchor) {
+      anchor.insertAdjacentElement('afterend', fallback);
+    } else {
+      const form = field && field.closest('form');
+      (form || select('#app') || document.body).prepend(fallback);
+    }
+  }
   return false;
 }
 
 function clearErrors() {
-  document.querySelectorAll('.err').forEach(e => e.textContent = '');
+  document.querySelectorAll('.err, .error').forEach(e => e.textContent = '');
+  document.querySelectorAll('[data-error-fallback]').forEach(e => e.remove());
 }
 
 // Label/value list used on summary, details and enrollment pages.
@@ -356,41 +279,10 @@ function detailsList(items) {
 
 
 /* ---------- 5. APPOINTMENT LOGIC ---------- */
-// Give a new account two past appointments so "Past" isn't empty.
-function addDemoPastAppointments(sid) {
-  const list = allAppointments();
-  if (list.some(a => a.sid === sid)) return;
-
-  const daysAgo = n => {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
-  };
-  list.push(
-    { id: 'demo1-' + sid, sid, type: 'Enrollment Assistance', date: daysAgo(21), time: '09:00 AM', queue: 'Q-004', status: 'Completed' },
-    { id: 'demo2-' + sid, sid, type: 'Document Submission',   date: daysAgo(9),  time: '02:00 PM', queue: 'Q-011', status: 'Completed' }
-  );
-  saveData('ee_appointments', list);
-}
-
-// A slot is unavailable if it already passed, is "busy" (simulated),
-// or is already booked. ignoreId lets a reschedule skip its own slot.
-function isSlotUnavailable(date, time, ignoreId) {
-  if (date === todayString() && appointmentDateTime({ date, time }) < new Date()) return true;
-
-  // Simulated: roughly 1 in 4 slots is busy, always the same for the same slot.
-  let score = 0;
-  for (const letter of date + time) score += letter.charCodeAt(0) * 7;
-  if (score % 4 === 0) return true;
-
-  return allAppointments().some(a =>
-    a.date === date && a.time === time && a.status !== 'Cancelled' && a.id !== ignoreId);
-}
-
 function generateBarcodeSvg(code) {
   const bars = [];
   let x = 12;
-  const str = String(code || 'CTU-PASS');
+  const str = String(code || '');
   for (let i = 0; i < str.length; i++) {
     const c = str.charCodeAt(i);
     const w1 = ((c * 3) % 4) + 1;
@@ -405,12 +297,13 @@ function generateBarcodeSvg(code) {
 
 function renderQueuePassCard(appt, title = 'Appointment Confirmed!') {
   const user = currentUser();
-  const details = OFFICE_DETAILS[appt.type] || {};
+  const backPage = currentPage === 'reschedule-confirmation' ? 'my-schedule.html' : 'dashboard.html';
+  const backLabel = currentPage === 'reschedule-confirmation' ? 'Back to My Schedule' : 'Back to Dashboard';
   return `
     <div class="card queue-pass-card" id="printableQueuePass">
       <div class="queue-pass-badge-header">
-        <div class="queue-pass-stamp">OFFICIAL CAMPUS TRANSACTION PASS</div>
-        <div class="queue-pass-univ">CEBU TECHNOLOGICAL UNIVERSITY · DAANBANTAYAN CAMPUS</div>
+        <div class="queue-pass-stamp">ENROLLMENT APPOINTMENT PASS</div>
+        <div class="queue-pass-univ">${escapeHtml(user && user.campus || 'Not set')}</div>
       </div>
 
       <div class="queue-pass-body">
@@ -421,26 +314,25 @@ function renderQueuePassCard(appt, title = 'Appointment Confirmed!') {
         </div>
 
         <div class="queue-pass-main-ticket">
-          <div class="queue-pass-ticket-label">CAMPUS QUEUE TICKET</div>
+          <div class="queue-pass-ticket-label">ENROLLMENT APPOINTMENT REFERENCE</div>
           <div class="queue-pass-ticket-num">${appt.queue}</div>
-          <div class="queue-pass-counter">📍 ${escapeHtml(details.window || 'Administration Building')}</div>
         </div>
 
         <div class="queue-pass-info-grid">
           <div class="queue-pass-field">
             <span class="q-label">Student Name</span>
-            <span class="q-val">${escapeHtml(user ? user.name : 'Enrolled Student')}</span>
+            <span class="q-val">${escapeHtml(user ? user.name : 'Not set')}</span>
           </div>
           <div class="queue-pass-field">
             <span class="q-label">Student ID</span>
-            <span class="q-val">${escapeHtml(user ? user.sid : '2024-00123')}</span>
+            <span class="q-val">${escapeHtml(user ? user.sid : 'Not set')}</span>
           </div>
           <div class="queue-pass-field">
             <span class="q-label">Section & Program</span>
-            <span class="q-val">${escapeHtml(user ? (user.section || 'BSIT 2-A') : 'BSIT 2-A')} · ${escapeHtml(user ? (user.program || 'BSIT') : 'BSIT')}</span>
+            <span class="q-val">${escapeHtml(user && user.section || 'Not set')} · ${escapeHtml(user && user.program || 'Not set')}</span>
           </div>
           <div class="queue-pass-field">
-            <span class="q-label">Transaction Type</span>
+            <span class="q-label">Appointment Type</span>
             <span class="q-val">${escapeHtml(appt.type)}</span>
           </div>
           <div class="queue-pass-field">
@@ -455,75 +347,30 @@ function renderQueuePassCard(appt, title = 'Appointment Confirmed!') {
 
         <div class="queue-barcode-wrap">
           ${generateBarcodeSvg(appt.queue + '-' + appt.id)}
-          <div class="queue-barcode-text">*CTU-DB-${appt.queue}-${appt.id.slice(-4)}*</div>
+          <div class="queue-barcode-text">*${escapeHtml(appt.referenceNumber || appt.queue)}*</div>
         </div>
 
         <div class="queue-pass-checklist-reminder">
-          <b style="color:var(--b)">Required Documents to Bring:</b>
+          <b style="color:var(--b)">Enrollment Appointment Instructions:</b>
           <ul>
-            ${(details.docs || ['Valid CTU Student ID Card', 'Pre-Enrollment Advising Slip']).map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+            <li>Arrive 15 minutes before your appointment.</li>
+            <li>Bring your verified enrollment documents and student identification.</li>
           </ul>
+          ${appt.emailSent === false ? '<p class="err">Your appointment is saved, but the confirmation email could not be sent. Please contact the registrar.</p>' : ''}
         </div>
       </div>
 
       <div class="queue-pass-actions no-print">
         <button class="btn alt" id="printQueueBtn" type="button">🖨️ Print / Save Pass</button>
-        <a class="btn" href="dashboard.html">Back to Dashboard</a>
+        <a class="btn" href="${backPage}">${backLabel}</a>
       </div>
     </div>`;
 }
 
-// Queue numbers count up per day and office prefix: REG-001, CSH-001, etc.
-function nextQueueNumber(date, type = '') {
-  const prefix = (type && OFFICE_DETAILS[type]?.prefix) ? OFFICE_DETAILS[type].prefix : 'Q';
-  const countThatDay = allAppointments().filter(a => a.date === date && (a.queue || '').startsWith(prefix)).length;
-  return `${prefix}-${String(countThatDay + 1).padStart(3, '0')}`;
-}
-
-// Used by both Book and Reschedule pages: draws the time buttons
-// when a date is chosen and reports the choice via onChange(date, time).
-function setupTimePicker(ignoreId, onChange) {
-  const dateInput = select('#date');
-  const slotBox = select('#slots');
-  dateInput.min = todayString();
-
-  function drawSlots() {
-    onChange(null, null);                       // clear any earlier choice
-    const date = dateInput.value;
-
-    if (!date) {
-      slotBox.innerHTML = '<p class="muted">Pick a date to see available times.</p>';
-      return;
-    }
-    const weekday = new Date(date + 'T00:00').getDay();   // 0 = Sunday, 6 = Saturday
-    if (date < todayString() || weekday === 0 || weekday === 6) {
-      slotBox.innerHTML = '<p class="err">Appointments are Monday to Friday, from today onward.</p>';
-      return;
-    }
-
-    slotBox.innerHTML = TIME_SLOTS.map(time => {
-      const off = isSlotUnavailable(date, time, ignoreId);
-      return `<button type="button" class="slot ${off ? 'off' : ''}" data-time="${time}" ${off ? 'disabled' : ''}>
-                ${time}<small>${off ? 'Unavailable' : 'Available'}</small></button>`;
-    }).join('');
-
-    slotBox.querySelectorAll('.slot:not(.off)').forEach(button => {
-      button.onclick = () => {
-        slotBox.querySelectorAll('.slot').forEach(b => b.classList.remove('sel'));
-        button.classList.add('sel');
-        onChange(date, button.dataset.time);
-      };
-    });
-  }
-  dateInput.onchange = drawSlots;
-  drawSlots();
-}
-
-
 /* ---------- 6. LAYOUT (sidebar + page content) ---------- */
 const MENU = [
   ['dashboard', '🏠', 'Dashboard'],
-  ['book-appointment', '📅', 'Book Appointment'],
+  ['book-appointment', '📅', 'Enrollment Appointment'],
   ['my-schedule', '🗓️', 'My Schedule'],
   ['enrollment', '🎓', 'Enrollment Details'],
   ['profile', '👤', 'Profile'],
@@ -587,17 +434,17 @@ PAGES.login = {
     <div class="auth"><form class="card" id="loginForm" novalidate>
       <div class="logo center">Enroll<span>Ease</span></div>
       <h2 class="center">Welcome back</h2>
-      <p class="muted center">Demo: 2024-00123 / demo1234</p>
+      <p class="muted center">Sign in with your registered student account.</p>
       ${inputField('loginId', 'Email Address or Student ID')}
       ${inputField('loginPassword', 'Password', 'password')}
       <a href="#" id="forgotLink">Forgot password?</a><br><br>
-      <button class="btn" style="width:100%">Login</button>
+      <button type="submit" class="btn" style="width:100%">Login</button>
       <p class="center">No account yet? <a href="register.html">Register</a></p>
-      <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin sign in</a></p>
+      <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin Login</a></p>
     </form></div>`,
 
   setup() {
-    select('#loginForm').onsubmit = event => {
+    select('#loginForm').onsubmit = async event => {
       event.preventDefault();
       clearErrors();
       const typedId = select('#loginId').value.trim();
@@ -608,30 +455,34 @@ PAGES.login = {
       if (!typedPassword) valid = showError('loginPassword', 'Enter your password.');
       if (!valid) return;
 
-      const user = allUsers().find(u =>
-        u.email.toLowerCase() === typedId.toLowerCase() || u.sid === typedId);
-      if (!user) return showError('loginId', 'No account found for that email or student ID.');
-      if (user.password !== typedPassword) return showError('loginPassword', 'Incorrect password. Try again.');
+      const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
 
-      saveData('ee_session', user.sid);
-      addDemoPastAppointments(user.sid);
-      flashMessage('Welcome back, ' + user.name.split(' ')[0] + '!');
-      goTo('dashboard');
+      try {
+        const response = await studentFetch('api/student/login.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginId: typedId, password: typedPassword })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          return showError('loginPassword', result.message || 'Unable to sign in.');
+        }
+        sessionStorage.setItem('ee_csrf', result.csrfToken);
+        saveData('ee_users', [result.profile]);
+        sessionStorage.setItem('ee_session', result.profile.sid);
+        flashMessage('Welcome back, ' + result.profile.name.split(' ')[0] + '!');
+        goTo('dashboard');
+      } catch (error) {
+        showError('loginPassword', 'The sign-in service is unavailable. Please try again.');
+      } finally {
+        if (submitButton) submitButton.disabled = false;
+      }
     };
 
     select('#forgotLink').onclick = event => {
       event.preventDefault();
-      const popup = showModal(`
-        <h3>Reset password</h3>
-        <p class="muted">Enter your email and we'll send reset instructions.</p>
-        ${inputField('resetEmail', 'Email Address', 'email')}
-        <button class="btn" id="sendReset">Send link</button>`);
-      popup.querySelector('#sendReset').onclick = () => {
-        const email = popup.querySelector('#resetEmail').value.trim();
-        if (!/^\S+@\S+\.\S+$/.test(email)) return showError('resetEmail', 'Enter a valid email address.');
-        popup.remove();
-        showToast('Reset link sent to ' + email);
-      };
+      showToast('Contact the registrar to reset your password.');
     };
   }
 };
@@ -654,32 +505,7 @@ PAGES.register = {
   setup() {
     select('#registerForm').onsubmit = event => {
       event.preventDefault();
-      clearErrors();
-      const name = select('#regName').value.trim();
-      const sid = select('#regSid').value.trim();
-      const email = select('#regEmail').value.trim();
-      const password = select('#regPassword').value;
-      const confirm = select('#regConfirm').value;
-      const users = allUsers();
-
-      let valid = true;
-      if (name.length < 3) valid = showError('regName', 'Enter your full name.');
-      if (!/^[\w-]{5,}$/.test(sid)) valid = showError('regSid', 'Student ID needs at least 5 letters, numbers or dashes.');
-      else if (users.some(u => u.sid === sid)) valid = showError('regSid', 'This Student ID is already registered.');
-      if (!/^\S+@\S+\.\S+$/.test(email)) valid = showError('regEmail', 'Enter a valid email address.');
-      else if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) valid = showError('regEmail', 'This email is already registered.');
-      if (password.length < 8) valid = showError('regPassword', 'Password must be at least 8 characters.');
-      if (confirm !== password) valid = showError('regConfirm', 'Passwords do not match.');
-      if (!valid) return;
-
-      users.push({
-        name, sid, email, password, contact: '',
-        program: 'BS Information Technology', year: '1st Year', section: 'BSIT 1-A', enrolled: todayString()
-      });
-      saveData('ee_users', users);
-      addDemoPastAppointments(sid);
-      flashMessage('Account created! Please log in.');
-      goTo('login');
+      showError('regSid', 'Please register through the secure registration form.');
     };
   }
 };
@@ -697,7 +523,7 @@ PAGES.dashboard = {
 
     return withSidebar(`
       <div class="banner">
-        <p style="margin:0;opacity:.85">Welcome back · <span style="background:rgba(255,255,255,0.22);padding:2px 8px;border-radius:6px;font-weight:700;letter-spacing:0.3px">${escapeHtml(user.section || 'BSIT 2-A')}</span></p>
+        <p style="margin:0;opacity:.85">Welcome back · <span style="background:rgba(255,255,255,0.22);padding:2px 8px;border-radius:6px;font-weight:700;letter-spacing:0.3px">${escapeHtml(user.section || 'Not set')}</span></p>
         <h1>${escapeHtml(user.name)}</h1>
         <p style="margin:0">${next
           ? 'Next appointment: ' + formatDate(next.date) + ' at ' + next.time + ' (' + next.type + ')'
@@ -708,18 +534,16 @@ PAGES.dashboard = {
       <div class="card study-load-widget">
         <div class="study-load-main">
           <div class="study-load-info">
-            <div class="study-load-tag">Official Study Load · 1st Semester A.Y. 2024-2025</div>
-            <h3 class="study-load-title">${escapeHtml(user.program || 'BS Information Technology')}</h3>
+            <div class="study-load-tag">Student Record</div>
+            <h3 class="study-load-title">${escapeHtml(user.program || 'Not set')}</h3>
             <div class="study-load-meta">
-              <span class="load-pill">Section: <b>${escapeHtml(user.section || 'BLK_BSIT-2A_DAY')}</b></span>
-              <span class="load-pill"><b>10</b> Enrolled Courses</span>
-              <span class="load-pill"><b>28.00</b> Total Academic Units</span>
-              <span class="load-pill status-pill">✓ Officially Enrolled</span>
+              <span class="load-pill">Year: <b>${escapeHtml(user.year || 'Not set')}</b></span>
+              <span class="load-pill status-pill">Status: ${escapeHtml(user.status || 'Not set')}</span>
             </div>
           </div>
           <div class="study-load-action">
             <a href="enrollment.html" class="btn btn-view-cor">
-              <span>View Official CTU COR</span>
+              <span>View Student Record</span>
               <span class="arrow">➔</span>
             </a>
           </div>
@@ -727,7 +551,7 @@ PAGES.dashboard = {
       </div>
 
       <div class="grid">
-        ${tile('book-appointment.html', '📅', 'Book Appointment', '<p class="muted">Reserve a time slot</p>')}
+        ${tile('book-appointment.html', '📅', 'Enrollment Appointment', '<p class="muted">Check eligibility and reserve a time</p>')}
         ${tile('my-schedule.html', '🗓️', 'My Schedule', '<p class="muted">Upcoming and past</p>')}
         ${tile('my-schedule.html', '🎟️', 'Queue Number',
                next ? `<div class="q">${next.queue}</div>` : '<p class="muted">No active queue</p>')}
@@ -745,156 +569,138 @@ PAGES.dashboard = {
 /* 5. Book appointment */
 PAGES['book-appointment'] = {
   render: () => withSidebar(`
-    <h1>Book Appointment</h1>
+    <h1>Enrollment Appointment</h1>
     <div class="card">
-      <label for="type">Campus Office & Transaction Type</label>
-      <select id="type">${APPOINTMENT_TYPES.map(t => `<option>${t}</option>`).join('')}</select>
-
-      <div id="officeDocBox" class="doc-checklist-box">
-        <div class="doc-checklist-header">
-          <span class="doc-badge">Required Documents</span>
-          <span id="officeLocationText" class="doc-location"></span>
-        </div>
-        <p class="doc-notice-sub">Please prepare the following required physical documents before arriving for your appointment:</p>
-        <ul id="officeDocList" class="doc-checklist"></ul>
+      <p class="muted">Your enrollment records are checked before any dates or times are made available.</p>
+      <section id="eligibilityResult" aria-live="polite" aria-busy="true">Checking enrollment eligibility…</section>
+      <div id="slotPicker" hidden>
+        <label for="enrollmentSlot">Available enrollment appointment dates and times</label>
+        <select id="enrollmentSlot"><option value="">Select an available slot</option></select>
+        <p class="muted">Slots are subject to availability until your booking is confirmed.</p>
+        <div class="err" id="bookingError" role="alert"></div>
+        <button class="btn" id="confirmEnrollmentButton" disabled>Confirm Enrollment Appointment</button>
       </div>
-
-      <label for="date">Appointment date</label>
-      <input type="date" id="date">
-      <label>Available times</label>
-      <div id="slots"></div>
-      <div class="err" id="error-book"></div>
-      <button class="btn" id="continueButton" disabled>Continue to Summary</button>
     </div>`),
 
   setup() {
-    const typeSelect = select('#type');
-    const locText = select('#officeLocationText');
-    const docList = select('#officeDocList');
-
-    function updateDocChecklist() {
-      const selectedType = typeSelect.value;
-      const details = OFFICE_DETAILS[selectedType];
-      if (details) {
-        locText.textContent = '📍 ' + details.window;
-        docList.innerHTML = details.docs.map(doc => `
-          <li class="doc-item">
-            <span class="doc-check-icon">✓</span>
-            <span>${escapeHtml(doc)}</span>
-          </li>
-        `).join('');
-      }
-    }
-
-    typeSelect.onchange = updateDocChecklist;
-    updateDocChecklist();
-
-    let chosenDate = null, chosenTime = null;
-    setupTimePicker(null, (date, time) => {
-      chosenDate = date;
-      chosenTime = time;
-      select('#continueButton').disabled = !time;
-    });
-
-    select('#continueButton').onclick = () => {
-      if (!chosenDate || !chosenTime) return showError('book', 'Select a date and an available time.');
-      sessionStorage.setItem('ee_draft', JSON.stringify({
-        type: typeSelect.value, date: chosenDate, time: chosenTime
-      }));
-      goTo('appointment-summary');
+    const resultBox = select('#eligibilityResult');
+    const slotPicker = select('#slotPicker');
+    const slotSelect = select('#enrollmentSlot');
+    const confirmButton = select('#confirmEnrollmentButton');
+    let slots = [];
+    const redirectToLogin = () => {
+      clearStudentSession();
+      goTo('login');
     };
+
+    const renderEligibility = (eligibility, profile, schedule) => {
+      resultBox.setAttribute('aria-busy', 'false');
+      profile = profile || currentUser() || { name: 'Student', sid: '' };
+      const checks = eligibility.checks || [];
+      resultBox.innerHTML = `<h2>${eligibility.eligible ? 'You are qualified to book' : 'Enrollment Appointment Not Available'}</h2>
+        <p>Student information verified: ${escapeHtml(profile.name)} · ${escapeHtml(profile.sid)}</p>
+        <p>Year level: ${escapeHtml(profile.yearLevel || profile.year || 'Not on file')}
+          ${schedule ? ` · Enrollment Week ${Number(schedule.week_number)}: ${escapeHtml(formatDate(schedule.start_date))} – ${escapeHtml(formatDate(schedule.end_date))}` : ''}</p>
+        ${eligibility.eligible ? '<p>All enrollment requirements are currently satisfied.</p>' : '<p>You are currently not qualified for enrollment because:</p>'}
+        <ul>${checks.map(check => `<li>${check.passed ? '✓' : '✗'} ${escapeHtml(check.label)}
+          ${(check.reasons || []).length ? `<ul>${check.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
+        ${eligibility.eligible ? '' : '<p>Please resolve the requirements above before booking an enrollment appointment.</p>'}
+        ${eligibility.eligible && !schedule ? '<p>No active enrollment schedule is available for your year level. Please contact the registrar.</p>' : ''}`;
+      slotPicker.hidden = !eligibility.eligible || !schedule;
+    };
+
+    const loadSlots = async () => {
+      const response = await studentFetch('api/student/slots.php', { credentials: 'same-origin' });
+      if (response.status === 401) return redirectToLogin();
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Available slots could not be loaded.');
+      if (!result.eligible) {
+        renderEligibility(result.eligibility, result.student, result.schedule);
+        return;
+      }
+      renderEligibility({ eligible: true, checks: [] }, result.student, result.schedule);
+      slots = result.slots;
+      slotSelect.innerHTML = '<option value="">Select an available slot</option>' +
+        slots.map((slot, index) => `<option value="${index}" ${slot.remaining === 0 ? 'disabled' : ''}>${escapeHtml(formatDate(slot.date))} · ${slot.dailyBooked}/${slot.dailyCapacity} students (${slot.dailyRemaining} daily slots left) · ${escapeHtml(slot.time)}${slot.remaining === 0 ? ' — FULL' : ''}</option>`).join('');
+      slotPicker.hidden = !result.schedule || slots.length === 0;
+      if (result.message) resultBox.insertAdjacentHTML('beforeend', `<p>${escapeHtml(result.message)}</p>`);
+      else if (!slots.length) resultBox.insertAdjacentHTML('beforeend', '<p>No enrollment appointment time slots are configured for your assigned week.</p>');
+      else if (slots.every(slot => slot.remaining === 0)) resultBox.insertAdjacentHTML('beforeend', '<p>All dates in your assigned enrollment week are FULL.</p>');
+    };
+
+    const loadEligibility = async () => {
+      try {
+        const response = await studentFetch('api/student/eligibility.php', { credentials: 'same-origin' });
+        if (response.status === 401) return redirectToLogin();
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'Eligibility could not be checked.');
+        renderEligibility(result.eligibility, result.student, result.schedule);
+        if (result.eligibility.eligible) await loadSlots();
+      } catch (error) {
+        resultBox.setAttribute('aria-busy', 'false');
+        resultBox.textContent = error.message || 'Eligibility records could not be checked. Please try again later.';
+      }
+    };
+
+    slotSelect.onchange = () => { confirmButton.disabled = slotSelect.value === ''; };
+    confirmButton.onclick = async () => {
+      const slot = slots[Number(slotSelect.value)];
+      if (!slot) return;
+      confirmButton.disabled = true;
+      select('#bookingError').textContent = '';
+      try {
+        const response = await studentFetch('api/student/book.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': sessionStorage.getItem('ee_csrf') || ''
+          },
+          body: JSON.stringify({ date: slot.date, time: slot.time })
+        });
+        if (response.status === 401) return redirectToLogin();
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          if (result.eligibility) renderEligibility(result.eligibility);
+          if (response.status === 409) {
+            await loadSlots();
+            slotSelect.value = '';
+            confirmButton.disabled = true;
+          }
+          throw new Error(result.message || 'The appointment could not be booked.');
+        }
+        const user = currentUser();
+        const appointment = {
+          id: result.appointment.referenceNumber,
+          referenceNumber: result.appointment.referenceNumber,
+          sid: user.sid,
+          type: 'Enrollment Appointment',
+          date: result.appointment.date,
+          time: result.appointment.time,
+          queue: result.appointment.referenceNumber,
+          status: result.appointment.status,
+          emailSent: result.appointment.emailSent
+        };
+        saveData('ee_appointments', allAppointments().concat(appointment));
+        saveData('ee_last', appointment.id);
+        sessionStorage.removeItem('ee_draft');
+        goTo('confirmation');
+      } catch (error) {
+        select('#bookingError').textContent = error.message || 'The appointment could not be booked.';
+        confirmButton.disabled = slotSelect.value === '';
+      }
+    };
+    loadEligibility();
   }
 };
 
 /* 6. Appointment summary */
 PAGES['appointment-summary'] = {
   render() {
-    const draft = JSON.parse(sessionStorage.getItem('ee_draft') || 'null');
-    if (!draft) { goTo('book-appointment'); return ''; }
-
-    const user = currentUser();
-    const details = OFFICE_DETAILS[draft.type] || {};
-    const qNum = nextQueueNumber(draft.date, draft.type);
-
-    return withSidebar(`
-      <h1>Appointment Summary</h1>
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--ln);padding-bottom:14px;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-          <div>
-            <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--b2)">Campus Office Visit</span>
-            <h3 style="margin:4px 0 0;font-size:18px">${escapeHtml(draft.type)}</h3>
-            <div class="muted" style="font-size:13px;margin-top:2px">📍 ${escapeHtml(details.window || 'Administration Building')}</div>
-          </div>
-          <div style="text-align:right">
-            <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">Estimated Queue #</span>
-            <div style="font-size:26px;font-weight:800;color:var(--b2);letter-spacing:1px">${qNum}</div>
-          </div>
-        </div>
-
-        ${detailsList({
-          'Student Name': user ? user.name : 'Enrolled Student',
-          'Student ID': user ? user.sid : '2024-00123',
-          'Section': user ? (user.section || 'BSIT 2-A') : 'BSIT 2-A',
-          'Appointment Date': formatDate(draft.date),
-          'Scheduled Time': draft.time,
-          'Designated Window': details.window || 'Administration Building'
-        })}
-
-        <h3 class="sec" style="font-size:15px;margin-top:20px;display:flex;align-items:center;gap:6px">
-          📋 <span>Required Documents to Present</span>
-        </h3>
-        <ul style="margin:8px 0 16px;padding-left:20px;line-height:1.7;color:var(--tx);font-size:14px">
-          ${(details.docs || ['Valid CTU Student ID Card', 'Pre-Enrollment Advising Slip']).map(d => `<li><b>${escapeHtml(d)}</b></li>`).join('')}
-        </ul>
-
-        <div style="background:rgba(59,130,246,0.06);border:1px solid var(--ln);border-radius:8px;padding:12px 14px;margin-bottom:20px">
-          <b style="font-size:13px;color:var(--b)">Important Reminder:</b>
-          <p style="margin:4px 0 0;font-size:12.5px;color:var(--mu);line-height:1.5">
-            Arrive at the designated office window 15 minutes before your schedule. Bring your physical documents and official CTU Student ID. Your digital queue ticket will be scanned upon arrival.
-          </p>
-        </div>
-
-        <div class="row">
-          <button class="btn alt" id="backButton">Back</button>
-          <button class="btn" id="confirmButton">Confirm Appointment</button>
-        </div>
-      </div>`);
+    goTo('book-appointment');
+    return '';
   },
-
-  setup() {
-    const draft = JSON.parse(sessionStorage.getItem('ee_draft'));
-    if (!draft) return;
-    select('#backButton').onclick = () => goTo('book-appointment');
-
-    select('#confirmButton').onclick = () => {
-      // Check again in case the slot was taken meanwhile.
-      if (isSlotUnavailable(draft.date, draft.time)) {
-        showToast('That slot was just taken. Choose another.', true);
-        return setTimeout(() => goTo('book-appointment'), 1200);
-      }
-      const qNum = nextQueueNumber(draft.date, draft.type);
-      const appointment = {
-        id: 'a' + Date.now(),
-        sid: loadData('ee_session'),
-        type: draft.type,
-        date: draft.date,
-        time: draft.time,
-        queue: qNum,
-        status: 'Confirmed'
-      };
-      saveData('ee_appointments', allAppointments().concat(appointment));
-      saveData('ee_last', appointment.id);
-
-      // Two-way sync to Admin Dashboard (enrolle_admin_appointments & enrolle_admin_students)
-      const user = currentUser();
-      if (user) {
-        syncToAdminDashboard(appointment, user);
-      }
-
-      sessionStorage.removeItem('ee_draft');
-      goTo('confirmation');
-    };
-  }
+  setup() {}
 };
 
 // The most recently booked/rescheduled appointment.
@@ -907,7 +713,7 @@ PAGES.confirmation = {
   render() {
     const appt = lastAppointment();
     if (!appt) { goTo('dashboard'); return ''; }
-    return withSidebar(renderQueuePassCard(appt, 'Appointment Confirmed!'));
+    return withSidebar(renderQueuePassCard(appt, 'Enrollment Appointment Requested'));
   },
   setup() {
     const printBtn = select('#printQueueBtn');
@@ -918,22 +724,31 @@ PAGES.confirmation = {
 /* 8. My schedule */
 PAGES['my-schedule'] = {
   render() {
-    const active = myAppointments().filter(a => a.status !== 'Cancelled');
+    const appointments = myAppointments().filter(a => a.type === 'Enrollment Appointment');
+    const active = appointments.filter(a => a.status !== 'Cancelled');
     const upcoming = active.filter(a => !isPast(a)).sort((a, b) => appointmentDateTime(a) - appointmentDateTime(b));
-    const past = active.filter(isPast).sort((a, b) => appointmentDateTime(b) - appointmentDateTime(a));
+    const past = appointments.filter(a => a.status === 'Cancelled' || isPast(a))
+      .sort((a, b) => appointmentDateTime(b) - appointmentDateTime(a));
 
-    const card = (appt, isUpcoming) => `
+    const card = (appt, isUpcoming) => {
+      const canChange = isUpcoming &&
+        ['Submitted', 'Pending', 'Approved', 'Confirmed', 'Rescheduled'].includes(appt.status);
+      const referenceNumber = escapeHtml(appt.referenceNumber || appt.id);
+      return `
       <div class="card ap">
         <div>
           <b>${appt.type}</b>
           <div class="muted">${formatDate(appt.date)} · ${appt.time}${isUpcoming ? ' · Queue ' + appt.queue : ''}</div>
         </div>
         <span class="badge ${isUpcoming ? (appt.status === 'Rescheduled' ? 'p' : '') : 'd'}">
-          ${isUpcoming ? appt.status : 'Completed'}</span>
+          ${isUpcoming ? appt.status : (appt.status === 'Cancelled' ? 'Cancelled' : 'Completed')}</span>
         ${isUpcoming ? `<div class="row">
-          <button class="btn sm alt" data-details="${appt.id}">View Details</button>
-          <button class="btn sm" data-reschedule="${appt.id}">Reschedule</button></div>` : ''}
+          <button class="btn sm alt" type="button" data-details="${referenceNumber}">View Details</button>
+          ${canChange ? `<button class="btn sm" type="button" data-reschedule="${referenceNumber}">Reschedule</button>
+          <button class="btn sm alt" type="button" data-cancel="${referenceNumber}">Cancel</button>` : ''}
+          </div>` : ''}
       </div>`;
+    };
 
     return withSidebar(`
       <h1>My Schedule</h1>
@@ -945,105 +760,240 @@ PAGES['my-schedule'] = {
   },
 
   setup() {
-    document.querySelectorAll('[data-details]').forEach(button => {
-      button.onclick = () => {
-        const appt = allAppointments().find(a => a.id === button.dataset.details);
-        const details = OFFICE_DETAILS[appt.type] || {};
-        const popup = showModal(`
-          <div style="text-align:center;margin-bottom:12px">
-            <span style="font-size:11px;font-weight:700;color:var(--b2);letter-spacing:1px;text-transform:uppercase">Campus Queue Ticket</span>
-            <div style="font-size:36px;font-weight:900;color:var(--b2);letter-spacing:1px;margin:2px 0">${appt.queue}</div>
-            <div style="font-size:12.5px;color:var(--tx);font-weight:600">📍 ${escapeHtml(details.window || 'Administration Building')}</div>
-          </div>
-          ${detailsList({
-            'Transaction': appt.type,
-            'Date': formatDate(appt.date),
-            'Time': appt.time,
-            'Status': appt.status
-          })}
-          <div style="margin-top:14px;padding:10px 12px;background:rgba(59,130,246,0.06);border-radius:6px;font-size:12px;color:var(--mu)">
-            <b style="color:var(--tx)">Required to bring:</b> ${(details.docs || ['Valid CTU Student ID Card']).join(', ')}
-          </div>
-          <br>
-          <div class="row">
-            <button class="btn alt" id="closeDetails">Close</button>
-            <button class="btn" id="openPassSlip">View Queue Pass</button>
-          </div>`);
-        popup.querySelector('#closeDetails').onclick = () => popup.remove();
-        popup.querySelector('#openPassSlip').onclick = () => {
-          saveData('ee_last', appt.id);
-          popup.remove();
-          goTo('confirmation');
+    const bindDetails = () => {
+      document.querySelectorAll('[data-details]').forEach(button => {
+        button.onclick = () => {
+          const appt = allAppointments().find(a => a.id === button.dataset.details);
+          if (!appt) return;
+          const popup = showModal(`
+            <div style="text-align:center;margin-bottom:12px">
+              <span style="font-size:11px;font-weight:700;color:var(--b2);letter-spacing:1px;text-transform:uppercase">Enrollment Appointment</span>
+              <div style="font-size:24px;font-weight:900;color:var(--b2);letter-spacing:1px;margin:2px 0">${escapeHtml(appt.referenceNumber || appt.queue)}</div>
+            </div>
+            ${detailsList({
+              'Appointment': appt.type,
+              'Date': formatDate(appt.date),
+              'Time': appt.time,
+              'Status': appt.status
+            })}
+            <div style="margin-top:14px;padding:10px 12px;background:rgba(59,130,246,0.06);border-radius:6px;font-size:12px;color:var(--mu)">
+              <b style="color:var(--tx)">Instructions:</b> Arrive 15 minutes early and bring your verified enrollment documents and student ID.
+            </div>
+            <br>
+            <div class="row">
+              <button class="btn alt" id="closeDetails">Close</button>
+              <button class="btn" id="openPassSlip">View Appointment Reference</button>
+            </div>`);
+          popup.querySelector('#closeDetails').onclick = () => popup.remove();
+          popup.querySelector('#openPassSlip').onclick = () => {
+            saveData('ee_last', appt.id);
+            popup.remove();
+            goTo('confirmation');
+          };
         };
-      };
-    });
-
-    document.querySelectorAll('[data-reschedule]').forEach(button => {
-      button.onclick = () => {
-        sessionStorage.setItem('ee_reschedule_id', button.dataset.reschedule);
-        goTo('reschedule');
-      };
-    });
+      });
+    };
+    const bindAppointmentActions = () => {
+      document.querySelectorAll('[data-reschedule]').forEach(button => {
+        button.onclick = () => {
+          sessionStorage.setItem('ee_reschedule_reference', button.dataset.reschedule);
+          goTo('reschedule');
+        };
+      });
+      document.querySelectorAll('[data-cancel]').forEach(button => {
+        button.onclick = async () => {
+          const referenceNumber = button.dataset.cancel;
+          if (!window.confirm('Cancel this enrollment appointment?')) return;
+          button.disabled = true;
+          try {
+            const response = await studentFetch('api/student/cancel.php', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': sessionStorage.getItem('ee_csrf') || ''
+              },
+              body: JSON.stringify({ referenceNumber })
+            });
+            if (response.status === 401) {
+              clearStudentSession();
+              goTo('login');
+              return;
+            }
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+              throw new Error(result.message || 'The appointment could not be cancelled.');
+            }
+            const updated = allAppointments().map(appointment =>
+              appointment.referenceNumber === referenceNumber
+                ? { ...appointment, status: 'Cancelled', emailSent: result.appointment.emailSent }
+                : appointment
+            );
+            saveData('ee_appointments', updated);
+            select('#app').innerHTML = PAGES['my-schedule'].render();
+            bindDetails();
+            bindAppointmentActions();
+            showToast(result.message, !result.appointment.emailSent);
+          } catch (error) {
+            showToast(error.message || 'The appointment could not be cancelled.', true);
+          } finally {
+            if (button.isConnected) button.disabled = false;
+          }
+        };
+      });
+    };
+    bindDetails();
+    bindAppointmentActions();
+    studentFetch('api/student/appointments.php', { credentials: 'same-origin' })
+      .then(async response => {
+        const result = await response.json();
+        if (response.status === 401) {
+          clearStudentSession();
+          goTo('login');
+          return;
+        }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Appointments could not be loaded.');
+        const serverAppointments = result.appointments.map(appointment => ({
+          ...appointment,
+          id: appointment.referenceNumber,
+          sid: sessionStorage.getItem('ee_session'),
+          type: 'Enrollment Appointment',
+          queue: appointment.referenceNumber
+        }));
+        const existing = allAppointments().filter(appointment =>
+          appointment.sid !== sessionStorage.getItem('ee_session') || appointment.type !== 'Enrollment Appointment'
+        );
+        saveData('ee_appointments', existing.concat(serverAppointments));
+        select('#app').innerHTML = PAGES['my-schedule'].render();
+        bindDetails();
+        bindAppointmentActions();
+      })
+      .catch(error => showToast(error.message || 'Appointments could not be loaded.', true));
   }
 };
 
 /* 9. Reschedule */
 PAGES.reschedule = {
   render() {
-    const appt = allAppointments().find(a => a.id === sessionStorage.getItem('ee_reschedule_id'));
-    if (!appt) { goTo('my-schedule'); return ''; }
-
+    const referenceNumber = sessionStorage.getItem('ee_reschedule_reference');
+    const appointment = allAppointments().find(item =>
+      item.referenceNumber === referenceNumber && item.status !== 'Cancelled'
+    );
+    if (!appointment) {
+      goTo('my-schedule');
+      return '';
+    }
     return withSidebar(`
       <h1>Reschedule Appointment</h1>
       <div class="card">
-        <h3>Current appointment</h3>
-        ${detailsList({ 'Type': appt.type, 'Date': formatDate(appt.date),
-                        'Time': appt.time, 'Queue number': appt.queue })}
-      </div>
-      <div class="card sec">
-        <label for="date">New date</label>
-        <input type="date" id="date">
-        <label>New available time</label>
-        <div id="slots"></div>
+        <p class="muted">Choose a new date and time for appointment ${escapeHtml(referenceNumber)}.</p>
+        <div id="rescheduleStatus" class="muted" aria-live="polite">Loading available enrollment times…</div>
+        <label for="rescheduleSlot">Available dates and times</label>
+        <select id="rescheduleSlot" disabled><option value="">Loading…</option></select>
+        <div id="rescheduleError" class="err" role="alert"></div>
         <div class="row">
-          <button class="btn alt" id="cancelButton">Cancel</button>
-          <button class="btn" id="saveButton" disabled>Confirm New Schedule</button>
+          <button class="btn" id="confirmRescheduleButton" type="button" disabled>Confirm Reschedule</button>
+          <button class="btn alt" id="cancelRescheduleButton" type="button">Back to My Schedule</button>
         </div>
       </div>`);
   },
-
   setup() {
-    const id = sessionStorage.getItem('ee_reschedule_id');
-    let newDate = null, newTime = null;
+    const referenceNumber = sessionStorage.getItem('ee_reschedule_reference');
+    const slotSelect = select('#rescheduleSlot');
+    const statusBox = select('#rescheduleStatus');
+    const errorBox = select('#rescheduleError');
+    const confirmButton = select('#confirmRescheduleButton');
+    const backButton = select('#cancelRescheduleButton');
+    let slots = [];
 
-    setupTimePicker(id, (date, time) => {
-      newDate = date;
-      newTime = time;
-      select('#saveButton').disabled = !time;
-    });
-
-    select('#cancelButton').onclick = () => {
-      sessionStorage.removeItem('ee_reschedule_id');
+    backButton.onclick = () => {
+      sessionStorage.removeItem('ee_reschedule_reference');
       goTo('my-schedule');
     };
 
-    select('#saveButton').onclick = () => {
-      const list = allAppointments();
-      const appt = list.find(a => a.id === id);
-      appt.date = newDate;
-      appt.time = newTime;
-      appt.queue = nextQueueNumber(newDate, appt.type);
-      appt.status = 'Rescheduled';
-      saveData('ee_appointments', list);
-      saveData('ee_last', id);
-      const user = currentUser();
-      if (user) {
-        syncToAdminDashboard(appt, user);
-      }
-      sessionStorage.removeItem('ee_reschedule_id');
-      goTo('reschedule-confirmation');
+    const redirectToLogin = () => {
+      clearStudentSession();
+      goTo('login');
     };
-  }
+    const loadSlots = async () => {
+      statusBox.textContent = 'Loading available enrollment times…';
+      slotSelect.disabled = true;
+      confirmButton.disabled = true;
+      const response = await studentFetch(
+        'api/student/slots.php?excludeReference=' + encodeURIComponent(referenceNumber),
+        { credentials: 'same-origin' }
+      );
+      if (response.status === 401) return redirectToLogin();
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Available enrollment times could not be loaded.');
+      }
+      if (!result.eligible) {
+        throw new Error('You are no longer eligible to reschedule. Contact the registrar.');
+      }
+      slots = result.slots;
+      slotSelect.innerHTML = '<option value="">Select a new date and time</option>' +
+        slots.map((slot, index) =>
+          `<option value="${index}" ${slot.remaining === 0 ? 'disabled' : ''}>${escapeHtml(formatDate(slot.date))} · ${slot.dailyBooked}/${slot.dailyCapacity} students (${slot.dailyRemaining} daily slots left) · ${escapeHtml(slot.time)}${slot.remaining === 0 ? ' — FULL' : ''}</option>`
+        ).join('');
+      slotSelect.disabled = slots.length === 0;
+      statusBox.textContent = result.message || (slots.length
+        ? 'Select an available time. Your current appointment remains active until the change is confirmed.'
+        : 'No enrollment appointment times are available for your assigned week.');
+    };
+
+    slotSelect.onchange = () => {
+      confirmButton.disabled = slotSelect.value === '';
+      errorBox.textContent = '';
+    };
+    confirmButton.onclick = async () => {
+      const slot = slots[Number(slotSelect.value)];
+      if (!slot) return;
+      confirmButton.disabled = true;
+      errorBox.textContent = '';
+      try {
+        const response = await studentFetch('api/student/reschedule.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': sessionStorage.getItem('ee_csrf') || ''
+          },
+          body: JSON.stringify({ referenceNumber, date: slot.date, time: slot.time })
+        });
+        if (response.status === 401) return redirectToLogin();
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          if (response.status === 409) await loadSlots();
+          throw new Error(result.message || 'The appointment could not be rescheduled.');
+        }
+        const updated = allAppointments().map(appointment =>
+          appointment.referenceNumber === referenceNumber
+            ? {
+                ...appointment,
+                date: result.appointment.date,
+                time: result.appointment.time,
+                status: result.appointment.status,
+                emailSent: result.appointment.emailSent
+              }
+            : appointment
+        );
+        saveData('ee_appointments', updated);
+        saveData('ee_last', referenceNumber);
+        sessionStorage.removeItem('ee_reschedule_reference');
+        goTo('reschedule-confirmation');
+      } catch (error) {
+        errorBox.textContent = error.message || 'The appointment could not be rescheduled.';
+      } finally {
+        confirmButton.disabled = slotSelect.value === '';
+      }
+    };
+
+    loadSlots().catch(error => {
+      statusBox.textContent = '';
+      errorBox.textContent = error.message || 'Available enrollment times could not be loaded.';
+    });
+  },
 };
 
 /* 10. Reschedule confirmation */
@@ -1051,7 +1001,9 @@ PAGES['reschedule-confirmation'] = {
   render() {
     const appt = lastAppointment();
     if (!appt) { goTo('dashboard'); return ''; }
-    return withSidebar(renderQueuePassCard(appt, 'Appointment Rescheduled!'));
+    return withSidebar(`
+      <p class="muted">Your appointment has been updated. The reference number is unchanged.</p>
+      ${renderQueuePassCard(appt, 'Appointment Rescheduled!')}`);
   },
   setup() {
     const printBtn = select('#printQueueBtn');
@@ -1059,183 +1011,34 @@ PAGES['reschedule-confirmation'] = {
   }
 };
 
-/* 11. Official CTU Certificate of Registration (COR) */
+/* 11. Enrollment record */
 PAGES.enrollment = {
   render() {
     const user = currentUser();
-    const sectionRaw = user.section || (user.program && user.program.toLowerCase().includes('information technology') ? 'BSIT 2-A' : 'Section 2-A');
-    const secLetter = sectionRaw.includes('2-B') ? '2B' : '2A';
-    const blockName = `BLK_BSIT-${secLetter}_DAY`;
-
-    const ctuSubjects = [
-      { section: 'CO379', subject: 'MS31', desc: 'MILITARY SCIENCE 31', unit: '3.00', time: '08:00AM-12:00PM', day: 'Sat', room: 'FIELD' },
-      { section: 'CO58', subject: 'GEC-E', desc: 'ETHICS', unit: '3.00', time: '11:00AM-12:00PM', day: 'M', room: 'ROOM 10' },
-      { section: 'CO59', subject: 'GEE-ES', desc: 'ENVIRONMENTAL SCIENCE', unit: '3.00', time: '01:00PM-02:00PM', day: 'Tue', room: 'ROOM 10' },
-      { section: 'CO60', subject: 'GEC-LWR', desc: 'LIFE AND WORKS OF RIZAL', unit: '3.00', time: '11:00AM-12:00PM', day: 'Tue', room: 'ROOM 10' },
-      { section: 'CO61', subject: 'PC 212', desc: 'QUANTITATIVE METHODS (MODELING & SIMULATION)', unit: '3.00', time: '10:00AM-11:00AM', day: 'M', room: 'ROOM 10' },
-      { section: 'CO62', subject: 'CC 214', desc: 'DATA STRUCTURES AND ALGORITHMS (LEC)', unit: '2.00', time: '08:00AM-10:00AM', day: 'M', room: 'ROOM 10' },
-      { section: 'CO63', subject: 'CC 214L', desc: 'DATA STRUCTURES AND ALGORITHMS (LAB)', unit: '3.00', time: '08:00AM-11:00AM', day: 'TueWTh', room: 'ROOM 10' },
-      { section: 'CO64', subject: 'P ELEC 1', desc: 'OBJECT - ORIENTED PROGRAMMING', unit: '3.00', time: '01:00PM-03:00PM', day: 'M', room: 'ROOM 10' },
-      { section: 'CO65', subject: 'P ELEC 2', desc: 'WEB SYSTEMS AND TECHNOLOGIES', unit: '3.00', time: '03:00PM-04:00PM', day: 'MWF', room: 'ROOM 10' },
-      { section: 'CO66', subject: 'PATHFIT 3', desc: 'PHYSICAL ACTIVITIES TOWARDS HEALTH AND FITNESS 3: DANCE/SPORTS/MARTIAL ARTS/GROU', unit: '2.00', time: '03:00PM-04:00PM', day: 'M', room: 'ROOM 10' }
-    ];
-
-    const ctuFees = [
-      { fee: 'Tuition', amount: '4200.00' },
-      { fee: 'Athletics Fee', amount: '200.00' },
-      { fee: 'Computer Fee', amount: '400.00' },
-      { fee: 'Cultural Fee', amount: '150.00' },
-      { fee: 'Development Fee', amount: '2815.00' },
-      { fee: 'Guidance Fee', amount: '90.00' },
-      { fee: 'Laboratory Fee', amount: '750.00' },
-      { fee: 'Library Fee', amount: '350.00' },
-      { fee: 'Medical and Dental Fee', amount: '200.00' },
-      { fee: 'Registration Fee', amount: '50.00' }
-    ];
-
     return withSidebar(`
-      <div class="row sp no-print" style="align-items: center; margin-bottom: 14px;">
-        <div>
-          <h1 style="margin: 0; font-size: 22px;">Enrollment & Study Load</h1>
-          <p class="muted" style="margin: 2px 0 0 0; font-size: 13px;">Official CTU Certificate of Registration (COR)</p>
-        </div>
-        <button type="button" class="cor-mini-btn" id="printCorBtn" title="Print or save as PDF">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -1px; margin-right: 4px;"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          Print / Save PDF
-        </button>
-      </div>
-
-      <div class="ctu-cor-wrapper">
-        <div class="ctu-cor-sheet">
-          <!-- Official Header -->
-          <div class="ctu-cor-header">
-            <div class="ctu-logo-col">
-              <img src="img/ctu-logo.png" alt="CTU Seal" class="ctu-header-logo" onerror="this.style.opacity='0'">
-            </div>
-            <div class="ctu-center-col">
-              <p class="ctu-rep">Republic of the Philippines</p>
-              <h1 class="ctu-univ-name">CEBU TECHNOLOGICAL UNIVERSITY</h1>
-              <h2 class="ctu-campus-name">DAANBANTAYAN CAMPUS</h2>
-              <p class="ctu-address">Agujo, Daanbantayan, Cebu, Philippines</p>
-              <p class="ctu-contact-line">Website: <a href="https://www.ctu.edu.ph" target="_blank">https://www.ctu.edu.ph</a> E-mail: <a href="mailto:info-daanbantayan@ctu.edu.ph">info-daanbantayan@ctu.edu.ph</a><br>Phone: +6332 239 6549 loc. 102</p>
-            </div>
-            <div class="ctu-logo-col">
-              <img src="img/bagong-pilipinas.png" alt="Bagong Pilipinas" class="ctu-header-logo" onerror="this.style.opacity='0'">
-            </div>
-          </div>
-
-          <hr class="ctu-divider-rule">
-          <div class="ctu-mis-title">MANAGEMENT INFORMATION SYSTEM</div>
-
-          <div class="ctu-doc-title-row">
-            <div class="ctu-doc-title-main">CERTIFICATE OF REGISTRATION</div>
-            <div class="ctu-doc-term">1st Semester SY 2025-2026</div>
-            <div class="ctu-doc-timestamp">1/16/2026 9:46:00 AM</div>
-          </div>
-
-          <!-- Student Information Row -->
-          <div class="ctu-student-info-row">
-            <div class="ctu-info-item"><span class="lbl">ID Number :</span> <span class="val font-mono">${escapeHtml(user.sid)}</span></div>
-            <div class="ctu-info-item"><span class="lbl">Name :</span> <span class="val">${escapeHtml(user.name.toUpperCase())}</span></div>
-            <div class="ctu-info-item"><span class="val">${escapeHtml(user.program && user.program.includes('IT') ? 'BSIT 2' : (user.year || 'BSIT 2'))}</span></div>
-            <div class="ctu-block-name">${escapeHtml(blockName)}</div>
-          </div>
-
-          <!-- Dual Column Tables: Subjects on Left (73%), Fees on Right (27%) -->
-          <div class="ctu-tables-flex">
-            <!-- Left: Subjects Table -->
-            <div class="ctu-subjects-container">
-              <table class="ctu-grid-table">
-                <thead>
-                  <tr>
-                    <th>SECTION</th>
-                    <th>SUBJECT</th>
-                    <th>DESCRIPTION</th>
-                    <th class="center">UNIT</th>
-                    <th>TIME</th>
-                    <th class="center">DAY</th>
-                    <th>ROOM</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${ctuSubjects.map(s => `
-                    <tr>
-                      <td class="center ctu-sub-code">${escapeHtml(s.section)}</td>
-                      <td class="ctu-sub-code">${escapeHtml(s.subject)}</td>
-                      <td class="ctu-sub-desc">${escapeHtml(s.desc)}</td>
-                      <td class="center font-mono">${escapeHtml(s.unit)}</td>
-                      <td style="white-space:nowrap">${escapeHtml(s.time)}</td>
-                      <td class="center">${escapeHtml(s.day)}</td>
-                      <td>${escapeHtml(s.room)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-                <tfoot>
-                  <tr class="ctu-table-total-row">
-                    <td colspan="3" class="right">Total Units</td>
-                    <td class="center font-mono">28.00</td>
-                    <td colspan="3"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            <!-- Right: Itemized Fees Table -->
-            <div class="ctu-fees-container">
-              <table class="ctu-grid-table">
-                <thead>
-                  <tr>
-                    <th>FEE</th>
-                    <th class="right">AMOUNT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${ctuFees.map(f => `
-                    <tr>
-                      <td>${escapeHtml(f.fee)}</td>
-                      <td class="right font-mono">${escapeHtml(f.amount)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-                <tfoot>
-                  <tr class="ctu-table-total-row">
-                    <td class="right">Total Charges</td>
-                    <td class="right font-mono">9205.00</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          <!-- Signatures Section -->
-          <div class="ctu-signatures-row">
-            <div class="ctu-sig-col">
-              <div class="ctu-sig-name">FAIMA M. ARRIESGADO</div>
-              <hr class="ctu-sig-rule">
-              <div class="ctu-sig-title">Registrar II</div>
-            </div>
-            <div class="ctu-sig-col ctu-sig-col-student">
-              <hr class="ctu-sig-rule">
-              <div class="ctu-sig-title">Student Signature</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `);
+      <h1>Enrollment &amp; Study Load</h1>
+      <div class="card">
+        <h2>Student Record</h2>
+        ${detailsList({
+          'Student ID': user.sid || 'Not set',
+          'Name': user.name || 'Not set',
+          'Program': user.program || 'Not set',
+          'Year level': user.year || 'Not set',
+          'Enrollment status': user.status || 'Not set',
+          'Campus': user.campus || 'Not set'
+        })}
+        <p class="muted">Course, fee, and registration details are not available through the current student API.</p>
+      </div>`);
   },
-  setup() {
-    const printBtn = select('#printCorBtn');
-    if (printBtn) {
-      printBtn.onclick = () => window.print();
-    }
-  }
+  setup() {}
 };
 
 /* 12. Profile */
 PAGES.profile = {
   render() {
     const user = currentUser();
-    const section = user.section || (user.program && user.program.toLowerCase().includes('information technology') ? 'BSIT 2-A' : 'Section 2-A');
+    const section = user.section || 'Not set';
+    const academicStatus = user.status || 'Not set';
 
     return withSidebar(`
       <div class="profile-page-wrapper">
@@ -1248,7 +1051,7 @@ PAGES.profile = {
               <div class="profile-badge-row">
                 <span class="badge-pill font-mono">${escapeHtml(user.sid)}</span>
                 <span class="badge-pill badge-primary">${escapeHtml(section)}</span>
-                <span class="badge-pill badge-success">Regular Student · Enrolled</span>
+                <span class="badge-pill badge-success">${escapeHtml(academicStatus)}</span>
               </div>
             </div>
             <!-- Discreet, non-obvious edit button -->
@@ -1268,9 +1071,9 @@ PAGES.profile = {
             <dt>Year & Section</dt><dd><b>${escapeHtml(user.year)} · ${escapeHtml(section)}</b></dd>
             <dt>Institutional Email</dt><dd id="displayEmail">${escapeHtml(user.email)}</dd>
             <dt>Contact Number</dt><dd id="displayContact">${user.contact ? escapeHtml(user.contact) : '<span class="muted">Not provided</span>'}</dd>
-            <dt>Academic Standing</dt><dd class="text-ok">Regular / In Good Standing</dd>
-            <dt>Enrollment Status</dt><dd class="text-ok">Officially Enrolled</dd>
-            <dt>Enrollment Date</dt><dd>${user.enrolled ? formatDate(user.enrolled) : 'October 15, 2024'}</dd>
+            <dt>Academic Standing</dt><dd>${escapeHtml(academicStatus)}</dd>
+            <dt>Enrollment Status</dt><dd>${escapeHtml(academicStatus)}</dd>
+            <dt>Enrollment Date</dt><dd>${user.enrolled ? formatDate(user.enrolled) : 'Not set'}</dd>
           </dl>
         </div>
       </div>
@@ -1330,7 +1133,7 @@ PAGES.settings = {
   render() {
     const notify = loadData('ee_notifications', { email: 1, sms: 0, reminders: 1 });
     const user = currentUser();
-    const section = user.section || (user.program && user.program.toLowerCase().includes('information technology') ? 'BSIT 2-A' : 'Section 2-A');
+    const section = user.section || 'Not set';
     const toggle = (key, label) => `
       <div class="row sp" style="margin:10px 0">
         <span>${label}</span>
@@ -1404,25 +1207,36 @@ PAGES.settings = {
       `);
 
       popup.querySelector('#cancelPasswordModal').onclick = () => popup.remove();
-      popup.querySelector('#modalPasswordForm').onsubmit = event => {
+      popup.querySelector('#modalPasswordForm').onsubmit = async event => {
         event.preventDefault();
         clearErrors();
-        const users = allUsers();
-        const user = users.find(u => u.sid === loadData('ee_session'));
         const oldPass = popup.querySelector('#oldPassword').value;
         const newPass = popup.querySelector('#newPassword').value;
         const confirmPass = popup.querySelector('#confirmPassword').value;
 
         let valid = true;
-        if (oldPass !== user.password) valid = showError('oldPassword', 'Current password is incorrect.');
         if (newPass.length < 8) valid = showError('newPassword', 'Use at least 8 characters.');
         if (confirmPass !== newPass) valid = showError('confirmPassword', 'Passwords do not match.');
         if (!valid) return;
 
-        user.password = newPass;
-        saveData('ee_users', users);
-        popup.remove();
-        showToast('Password updated successfully.');
+        try {
+          const response = await studentFetch('api/student/password.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': sessionStorage.getItem('ee_csrf') || ''
+            },
+            body: JSON.stringify({ currentPassword: oldPass, newPassword: newPass })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            return showError('oldPassword', result.message || 'The password could not be updated.');
+          }
+          popup.remove();
+          showToast(result.message);
+        } catch (error) {
+          showError('oldPassword', 'The password service is unavailable. Please try again.');
+        }
       };
     };
   }
