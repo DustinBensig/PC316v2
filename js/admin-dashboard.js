@@ -3,6 +3,20 @@
 
   const departments = ["SSG", "CodeTech", "COED", "HM", "BIT", "Registrar", "Clinic", "Cashier", "Guidance"];
   const roleNames = { MIS: "MIS · Main Admin", SSG: "SSG Admin", CodeTech: "CodeTech Admin", COED: "COED Admin", HM: "HM Admin", BIT: "BIT Admin", Registrar: "Registrar Admin", Clinic: "Clinic Admin", Cashier: "Cashier Admin", Guidance: "Guidance Admin" };
+  let adminSession;
+  try {
+    adminSession = JSON.parse(localStorage.getItem("enrolle_admin_session") || "null");
+  } catch (error) {
+    console.error("Unable to read the administrator sign-in session.", error);
+    window.location.replace("admin-login/admin-login.html");
+    return;
+  }
+  if (!adminSession || !Object.prototype.hasOwnProperty.call(roleNames, adminSession.role) ||
+      typeof adminSession.name !== "string" || typeof adminSession.email !== "string") {
+    window.location.replace("admin-login/admin-login.html");
+    return;
+  }
+
   const permissionCatalog = {
     SSG: [["appointments.read.assigned", "View assigned appointments"], ["appointments.update.assigned", "Update SSG appointments"], ["students.read.assigned", "View assigned student information"], ["announcements.manage", "Manage announcements"]],
     CodeTech: [["appointments.read.assigned", "View assigned appointments"], ["appointments.update.assigned", "Update CodeTech appointments"], ["students.read.assigned", "View assigned student information"], ["documents.verify.assigned", "Verify required documents"]],
@@ -72,8 +86,7 @@
     { message: "<strong>Clinic</strong> marked a medical clearance as pending.", time: "36 minutes ago", department: "Clinic" },
     { message: "<strong>Cashier</strong> recorded a student payment.", time: "1 hour ago", department: "Cashier" }
   ]);
-  let role = sessionStorage.getItem("enrolle_admin_authenticated_role") || load("enrolle_admin_role", "MIS");
-  if (!roleNames[role]) role = "MIS";
+  let role = adminSession.role;
   let activeSection = "dashboard";
   let searchQuery = "";
   let statusFilter = "All statuses";
@@ -97,8 +110,7 @@
   };
   const currentAdmin = () => {
     const admin = admins.find((entry) => entry.department === role) || admins[0];
-    const signedInName = sessionStorage.getItem("enrolle_admin_authenticated_name");
-    return signedInName ? { ...admin, name: signedInName } : admin;
+    return { ...admin, name: adminSession.name, email: adminSession.email };
   };
   const hasPermission = (permission) => role === "MIS" || (rolePermissions[role] || []).includes(permission);
   const visibleNotifications = () => role === "MIS" ? notifications : notifications.filter((item) => item.department === role || item.department === "all");
@@ -545,26 +557,14 @@
     toastTimer = setTimeout(() => toast.remove(), 3000);
   }
 
-  async function signOut() {
-    const isAuthenticated = Boolean(sessionStorage.getItem("enrolle_admin_authenticated_role"));
-    if (isAuthenticated) {
-      try {
-        const response = await fetch("api/admin/logout.php", { method: "POST", credentials: "same-origin", headers: { "Accept": "application/json" } });
-        if (!response.ok) throw new Error("The sign-out service could not end your server session. Please try again.");
-      } catch (error) {
-        showToast(error instanceof TypeError ? "Cannot reach the PHP sign-out service. Your session is still active." : error.message);
-        return;
-      }
-    }
+  function signOut() {
     const loginPages = {
       MIS: "admin-login/mis-admin-login.html", SSG: "admin-login/ssg-admin-login.html", CodeTech: "admin-login/codetech-admin-login.html",
       COED: "admin-login/coed-admin-login.html", HM: "admin-login/hm-admin-login.html", BIT: "admin-login/bit-admin-login.html",
       Registrar: "admin-login/registrar-admin-login.html", Clinic: "admin-login/clinic-admin-login.html",
       Cashier: "admin-login/cashier-admin-login.html", Guidance: "admin-login/guidance-admin-login.html"
     };
-    sessionStorage.removeItem("enrolle_admin_authenticated_role");
-    sessionStorage.removeItem("enrolle_admin_authenticated_name");
-    sessionStorage.removeItem("enrolle_admin_authenticated_email");
+    localStorage.removeItem("enrolle_admin_session");
     localStorage.removeItem("enrolle_admin_role");
     window.location.assign(loginPages[role] || "admin-login/admin-login.html");
   }
@@ -874,24 +874,6 @@
     render();
   });
 
-  function mountDemoRoleSwitcher() {
-    const card = document.querySelector(".role-card");
-    if (!card || sessionStorage.getItem("enrolle_admin_authenticated_role")) return;
-    card.insertAdjacentHTML("beforeend", `<label for="role-preview" style="display:block;margin-top:12px;color:#aeb8ca;font-size:10px">Demo role preview</label><select id="role-preview" style="width:100%;margin-top:6px;padding:7px;border:1px solid #42516a;border-radius:7px;color:#e9edf6;background:#23314a;font-size:10px">${Object.entries(roleNames).map(([key, value]) => `<option value="${key}" ${role === key ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select>`);
-    document.querySelector("#role-preview").addEventListener("change", (event) => {
-      role = event.target.value;
-      save("enrolle_admin_role", role);
-      activeSection = "dashboard";
-      searchQuery = "";
-      render();
-    });
-  }
-
-  const originalRender = render;
-  render = function renderWithRolePreview() {
-    originalRender();
-    mountDemoRoleSwitcher();
-  };
   syncStudentPortal();
   render();
 })();

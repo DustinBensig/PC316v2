@@ -338,12 +338,26 @@ function inputField(id, label, type = 'text', value = '', extra = '') {
 
 // Put a red message under a field. Always returns false (= "not valid").
 function showError(fieldId, message) {
-  select('#error-' + fieldId).textContent = message;
+  const fieldError = select('#error-' + fieldId);
+  if (fieldError) {
+    fieldError.textContent = message;
+  } else {
+    const loginError = select('#login-error');
+    if (loginError) {
+      loginError.textContent = message;
+      loginError.hidden = false;
+    }
+  }
   return false;
 }
 
 function clearErrors() {
   document.querySelectorAll('.err').forEach(e => e.textContent = '');
+  const loginError = select('#login-error');
+  if (loginError) {
+    loginError.textContent = '';
+    loginError.hidden = true;
+  }
 }
 
 // Label/value list used on summary, details and enrollment pages.
@@ -378,13 +392,13 @@ function addDemoPastAppointments(sid) {
 function isSlotUnavailable(date, time, ignoreId) {
   if (date === todayString() && appointmentDateTime({ date, time }) < new Date()) return true;
 
-  // Simulated: roughly 1 in 4 slots is busy, always the same for the same slot.
-  let score = 0;
-  for (const letter of date + time) score += letter.charCodeAt(0) * 7;
-  if (score % 4 === 0) return true;
-
-  return allAppointments().some(a =>
-    a.date === date && a.time === time && a.status !== 'Cancelled' && a.id !== ignoreId);
+  const activeAppointments = allAppointments().filter(a =>
+    a.date === date && a.status !== 'Cancelled' && a.id !== ignoreId);
+  const period = activeAppointments.find(a => a.time === time && a.period)?.period;
+  if (period) {
+    return activeAppointments.filter(a => a.period === period).length >= 150;
+  }
+  return activeAppointments.some(a => a.time === time);
 }
 
 function generateBarcodeSvg(code) {
@@ -522,12 +536,14 @@ function setupTimePicker(ignoreId, onChange) {
 
 /* ---------- 6. LAYOUT (sidebar + page content) ---------- */
 const MENU = [
-  ['dashboard', '🏠', 'Dashboard'],
-  ['book-appointment', '📅', 'Book Appointment'],
-  ['my-schedule', '🗓️', 'My Schedule'],
-  ['enrollment', '🎓', 'Enrollment Details'],
-  ['profile', '👤', 'Profile'],
-  ['settings', '⚙️', 'Settings']
+  ['dashboard', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3L21 10.5V20H14V14H10V20H3V10.5Z"/></svg>', 'Dashboard', 'dashboard.html'],
+  ['book-appointment', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2V7M17 2V7M3 10H21"/><path d="M8 14H10M14 14H16"/></svg>', 'Book Appointment', 'book-appointment.html'],
+  ['my-schedule', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6V12L16 15"/></svg>', 'My Appointment', 'my-schedule.html'],
+  ['queue-number', '<svg viewBox="0 0 24 24" fill="white" aria-hidden="true"><circle cx="12" cy="7" r="3.2"/><path d="M6.5 18.5C6.5 15.5 8.8 13 12 13C15.2 13 17.5 15.5 17.5 18.5V20H6.5V18.5Z"/><circle cx="5.5" cy="8" r="2.5"/><path d="M5.5 12C3.3 12 2 13.8 2 16V19H5V18.5C5 16.7 5.5 15.1 6.6 13.9C6.2 13.2 5.8 12.6 5.5 12Z"/><circle cx="18.5" cy="8" r="2.5"/><path d="M18.5 12C20.7 12 22 13.8 22 16V19H19V18.5C19 16.7 18.5 15.1 17.4 13.9C17.8 13.2 18.2 12.6 18.5 12Z"/></svg>', 'Queue Number', 'queue-number.html'],
+  ['enrollment', '<svg viewBox="0 0 24 24" fill="white" aria-hidden="true"><circle cx="6.5" cy="6.5" r="3.2"/><path d="M1.5 20V18C1.5 14.7 3.8 12.5 6.5 12.5C9.2 12.5 11.5 14.7 11.5 18V20H1.5Z"/><path d="M13 3.5H22.5V5.8H13V3.5Z"/><path d="M13 8.2H22.5V10.5H13V8.2Z"/><path d="M13 12.9H22.5V15.2H13V12.9Z"/></svg>', 'Enrollment Details', 'enrollment.html'],
+  ['campus-map', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6L9 3L15 6L21 3V18L15 21L9 18L3 21V6Z"/><path d="M9 3V18M15 6V21"/></svg>', 'Campus Map', 'campus-map.html'],
+  ['profile', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 21V19C4 15.5 7 13 12 13C17 13 20 15.5 20 19V21H4Z"/></svg>', 'Profile', 'profile.html'],
+  ['settings', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L14 4.5L17 4L18 7L21 9L19.5 12L21 15L18 17L17 20L14 19.5L12 22L10 19.5L7 20L6 17L3 15L4.5 12L3 9L6 7L7 4L10 4.5L12 2Z"/><circle cx="12" cy="12" r="3"/></svg>', 'Settings', 'settings.html']
 ];
 // Which menu item stays highlighted on sub-pages.
 const HIGHLIGHT = {
@@ -537,22 +553,35 @@ const HIGHLIGHT = {
 
 function withSidebar(content) {
   const active = HIGHLIGHT[currentPage] || currentPage;
-  const links = MENU.map(([page, icon, label]) =>
-    `<a href="${page}.html" class="${page === active ? 'on' : ''}">${icon} ${label}</a>`).join('');
+  const links = MENU.map(([page, icon, label, href]) =>
+    `<a href="${href}" class="nav-link${page === active ? ' active' : ''}"${page === active ? ' aria-current="page"' : ''}>${icon}<span>${label}</span></a>`).join('');
 
   return `
-    <div class="shell">
-      <aside class="side" id="sidebar">
-        <div class="logo">Enroll<span>Ease</span></div>
-        ${links}
-        <a href="#" id="sidebarLogout">🚪 Logout</a>
+    <div class="dashboard app-dashboard" style="height:auto;min-height:calc(100vh - 16px);overflow:visible">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <svg class="brand-logo" viewBox="0 0 60 55" aria-hidden="true">
+            <path d="M30 2L2 19L30 36L58 19L30 2Z" fill="white"/>
+            <path d="M10 25V37L30 50L50 37V25L30 37L10 25Z" fill="white"/>
+            <path d="M51 21V37H56V18Z" fill="white"/>
+          </svg>
+          <div class="brand-name">
+            <strong>EnrollEase</strong>
+            <span>Smarter Enrollment.</span>
+            <span>Bright Future.</span>
+          </div>
+        </div>
+        <nav class="sidebar-nav" aria-label="Student navigation">
+          ${links}
+        </nav>
+        <div class="sidebar-curve"></div>
       </aside>
-      <main class="main">
+      <main class="main-area" style="height:auto;min-height:calc(100vh - 16px)">
         <div class="top">
           <button class="burger" id="menuButton" aria-label="Menu">☰</button>
           <b class="logo">EnrollEase</b>
         </div>
-        ${content}
+        <div class="app-page-content">${content}</div>
       </main>
     </div>`;
 }
@@ -588,12 +617,11 @@ PAGES.login = {
       <div class="logo center">Enroll<span>Ease</span></div>
       <h2 class="center">Welcome back</h2>
       <p class="muted center">Demo: 2024-00123 / demo1234</p>
-      ${inputField('loginId', 'Email Address or Student ID')}
+      ${inputField('loginId', 'Email, Student ID, or Admin Email')}
       ${inputField('loginPassword', 'Password', 'password')}
       <a href="#" id="forgotLink">Forgot password?</a><br><br>
       <button class="btn" style="width:100%">Login</button>
       <p class="center">No account yet? <a href="register.html">Register</a></p>
-      <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin sign in</a></p>
     </form></div>`,
 
   setup() {
@@ -608,12 +636,35 @@ PAGES.login = {
       if (!typedPassword) valid = showError('loginPassword', 'Enter your password.');
       if (!valid) return;
 
-      const user = allUsers().find(u =>
-        u.email.toLowerCase() === typedId.toLowerCase() || u.sid === typedId);
-      if (!user) return showError('loginId', 'No account found for that email or student ID.');
-      if (user.password !== typedPassword) return showError('loginPassword', 'Incorrect password. Try again.');
+      const admin = window.EnrolleAdminAuth?.authenticate(typedId, typedPassword);
+      if (admin) {
+        try {
+          localStorage.removeItem('ee_session');
+          localStorage.setItem('enrolle_admin_session', JSON.stringify({
+            ...admin,
+            signedInAt: Date.now()
+          }));
+        } catch (error) {
+          console.error('Unable to save the administrator sign-in session.', error);
+          return showError('loginId', 'Unable to save your sign-in. Check that browser storage is enabled and try again.');
+        }
+        window.location.assign('admin-dashboard.html');
+        return;
+      }
 
-      saveData('ee_session', user.sid);
+      const user = allUsers().find(u =>
+        (typeof u.email === 'string' && u.email.toLowerCase() === typedId.toLowerCase()) ||
+        u.sid === typedId);
+      if (!user) return showError('loginId', 'Wrong email or student ID. Check it and try again.');
+      if (user.password !== typedPassword) return showError('loginPassword', 'Wrong password. Try again.');
+
+      try {
+        saveData('ee_session', user.sid);
+        localStorage.removeItem('enrolle_admin_session');
+      } catch (error) {
+        console.error('Unable to save the student sign-in session.', error);
+        return showError('loginId', 'Unable to save your sign-in. Check that browser storage is enabled and try again.');
+      }
       addDemoPastAppointments(user.sid);
       flashMessage('Welcome back, ' + user.name.split(' ')[0] + '!');
       goTo('dashboard');
@@ -623,14 +674,35 @@ PAGES.login = {
       event.preventDefault();
       const popup = showModal(`
         <h3>Reset password</h3>
-        <p class="muted">Enter your email and we'll send reset instructions.</p>
-        ${inputField('resetEmail', 'Email Address', 'email')}
-        <button class="btn" id="sendReset">Send link</button>`);
-      popup.querySelector('#sendReset').onclick = () => {
+        <p class="muted">Enter your registered email and choose a new password. This demo updates the password stored in this browser.</p>
+        <form id="resetPasswordForm" novalidate>
+          ${inputField('resetEmail', 'Email Address', 'email')}
+          ${inputField('resetPassword', 'New password', 'password')}
+          ${inputField('resetConfirm', 'Confirm new password', 'password')}
+          <button class="btn" type="submit">Update password</button>
+        </form>`);
+      popup.querySelector('#resetPasswordForm').onsubmit = resetEvent => {
+        resetEvent.preventDefault();
         const email = popup.querySelector('#resetEmail').value.trim();
         if (!/^\S+@\S+\.\S+$/.test(email)) return showError('resetEmail', 'Enter a valid email address.');
+        const users = allUsers();
+        const user = users.find(account =>
+          typeof account.email === 'string' && account.email.toLowerCase() === email.toLowerCase()
+        );
+        if (!user) return showError('resetEmail', 'No account was found for that email address.');
+        const password = popup.querySelector('#resetPassword').value;
+        const confirmation = popup.querySelector('#resetConfirm').value;
+        if (password.length < 8) return showError('resetPassword', 'Password must be at least 8 characters.');
+        if (password !== confirmation) return showError('resetConfirm', 'Passwords do not match.');
+        user.password = password;
+        try {
+          saveData('ee_users', users);
+        } catch (error) {
+          console.error('Unable to save the password reset.', error);
+          return showError('resetPassword', 'Unable to save your new password. Check browser storage and try again.');
+        }
         popup.remove();
-        showToast('Reset link sent to ' + email);
+        showToast('Password updated. You can now sign in with your new password.');
       };
     };
   }
@@ -643,8 +715,27 @@ PAGES.register = {
       <div class="logo center">Enroll<span>Ease</span></div>
       <h2 class="center">Create Account</h2>
       ${inputField('regName', 'Full Name')}
-      ${inputField('regSid', 'Student ID', 'text', '', 'placeholder="2024-00000"')}
+      ${inputField('regSid', 'Student ID / LRN', 'text', '', 'placeholder="Student ID or LRN"')}
       ${inputField('regEmail', 'Email Address', 'email')}
+      ${inputField('regContact', 'Phone Number', 'tel')}
+      <label for="regProgram">Course / Program</label>
+      <select id="regProgram">
+        <option value="">Select course / program</option>
+        <option>BS Information Technology</option>
+        <option>BS Computer Science</option>
+        <option>BS Information Systems</option>
+        <option>BS Hospitality Management</option>
+        <option>BS Industrial Technology</option>
+        <option>BS Education</option>
+      </select>
+      <div class="err" id="error-regProgram"></div>
+      <label for="regYear">Year Level</label>
+      <select id="regYear">
+        <option value="">Select year level</option>
+        <option>1st Year</option><option>2nd Year</option>
+        <option>3rd Year</option><option>4th Year</option>
+      </select>
+      <div class="err" id="error-regYear"></div>
       ${inputField('regPassword', 'Password', 'password')}
       ${inputField('regConfirm', 'Confirm Password', 'password')}
       <button class="btn" style="width:100%">Create Account</button>
@@ -658,29 +749,67 @@ PAGES.register = {
       const name = select('#regName').value.trim();
       const sid = select('#regSid').value.trim();
       const email = select('#regEmail').value.trim();
+      const contact = select('#regContact').value.trim();
+      const program = select('#regProgram').value;
+      const year = select('#regYear').value;
       const password = select('#regPassword').value;
       const confirm = select('#regConfirm').value;
       const users = allUsers();
 
       let valid = true;
       if (name.length < 3) valid = showError('regName', 'Enter your full name.');
-      if (!/^[\w-]{5,}$/.test(sid)) valid = showError('regSid', 'Student ID needs at least 5 letters, numbers or dashes.');
-      else if (users.some(u => u.sid === sid)) valid = showError('regSid', 'This Student ID is already registered.');
+      if (!/^[\w-]{5,}$/.test(sid)) valid = showError('regSid', 'Enter a valid Student ID or LRN (at least 5 letters, numbers or dashes).');
+      else if (users.some(u => u.sid === sid)) valid = showError('regSid', 'This Student ID / LRN is already registered.');
       if (!/^\S+@\S+\.\S+$/.test(email)) valid = showError('regEmail', 'Enter a valid email address.');
-      else if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) valid = showError('regEmail', 'This email is already registered.');
+      else if (users.some(u => typeof u.email === 'string' && u.email.toLowerCase() === email.toLowerCase())) valid = showError('regEmail', 'This email is already registered.');
+      if (!contact) valid = showError('regContact', 'Enter your phone number.');
+      if (!program) valid = showError('regProgram', 'Select your course or program.');
+      if (!year) valid = showError('regYear', 'Select your year level.');
       if (password.length < 8) valid = showError('regPassword', 'Password must be at least 8 characters.');
       if (confirm !== password) valid = showError('regConfirm', 'Passwords do not match.');
       if (!valid) return;
 
       users.push({
-        name, sid, email, password, contact: '',
-        program: 'BS Information Technology', year: '1st Year', section: 'BSIT 1-A', enrolled: todayString()
+        name, sid, email, password, contact, program, year,
+        section: program.includes('Information Technology') ? `BSIT ${year.charAt(0)}-A` : 'Section 1-A',
+        enrolled: todayString(),
+        status: 'Regular / Officially Enrolled'
       });
-      saveData('ee_users', users);
-      addDemoPastAppointments(sid);
-      flashMessage('Account created! Please log in.');
-      goTo('login');
+      try {
+        saveData('ee_users', users);
+      } catch (error) {
+        console.error('Unable to save the new student account.', error);
+        return showError('regEmail', 'Unable to save your account. Check browser storage and try again.');
+      }
+      try {
+        addDemoPastAppointments(sid);
+        saveData('ee_session', sid);
+      } catch (error) {
+        console.error('Unable to initialize the new student account.', error);
+        return showError('regEmail', 'Your account could not be fully initialized. Check browser storage and try again.');
+      }
+      flashMessage('Account created successfully!');
+      goTo('dashboard');
     };
+
+    document.querySelectorAll('.password-eye').forEach(toggle => {
+      const password = toggle.closest('.password-group')?.querySelector('input');
+      if (!password) return;
+      const togglePassword = () => {
+        const visible = password.type === 'password';
+        password.type = visible ? 'text' : 'password';
+        toggle.classList.toggle('fa-eye', !visible);
+        toggle.classList.toggle('fa-eye-slash', visible);
+        toggle.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+      };
+      toggle.addEventListener('click', togglePassword);
+      toggle.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          togglePassword();
+        }
+      });
+    });
   }
 };
 
@@ -728,19 +857,201 @@ PAGES.dashboard = {
 
       <div class="grid">
         ${tile('book-appointment.html', '📅', 'Book Appointment', '<p class="muted">Reserve a time slot</p>')}
-        ${tile('my-schedule.html', '🗓️', 'My Schedule', '<p class="muted">Upcoming and past</p>')}
-        ${tile('my-schedule.html', '🎟️', 'Queue Number',
+        ${tile('my-schedule.html', '🗓️', 'My Appointment', '<p class="muted">Upcoming and past</p>')}
+        ${tile('queue-number.html', '🎟️', 'Queue Number',
                next ? `<div class="q">${next.queue}</div>` : '<p class="muted">No active queue</p>')}
         ${tile('enrollment.html', '🎓', 'Enrollment & COR', '<p class="muted">Official Study Load (COR)</p>')}
         ${tile('profile.html', '👤', 'Profile', '<p class="muted">Your information</p>')}
         ${tile('settings.html', '⚙️', 'Settings', '<p class="muted">Preferences</p>')}
-        <a class="card tile" href="#" id="dashboardLogout"><div class="ic">🚪</div><b>Logout</b></a>
       </div>`);
   },
   setup() {
-    select('#dashboardLogout').onclick = event => { event.preventDefault(); logout(); };
+    if (select('.app-shell')) {
+      setupDashboardView();
+    }
   }
 };
+
+function setupDashboardView() {
+  const user = currentUser();
+  const appointments = myAppointments();
+  const now = new Date();
+  let visibleMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const activeAppointments = appointments.filter(appt =>
+    appt.status !== 'Cancelled' && !isPast(appt)
+  ).sort((first, second) =>
+    appointmentDateTime(first) - appointmentDateTime(second)
+  );
+  const nextAppointment = activeAppointments[0];
+  const initials = studentInitials(user.name);
+
+  document.querySelectorAll('[data-dashboard-name]').forEach(element => {
+    element.textContent = user.name;
+  });
+  document.querySelectorAll('[data-dashboard-initials]').forEach(element => {
+    element.textContent = initials;
+  });
+  select('#dashboardName').textContent = user.name;
+  select('#dashboardGreeting').textContent =
+    `Good ${now.getHours() < 12 ? 'morning' : now.getHours() < 18 ? 'afternoon' : 'evening'},`;
+  select('#dashboardStudentId').textContent = user.sid;
+  select('#dashboardEnrollmentStatus').textContent = user.status || 'Not set';
+  document.title = `EnrollEase | ${user.name} - Dashboard`;
+
+  if (nextAppointment) {
+    const nextDate = new Date(nextAppointment.date + 'T00:00');
+    select('#dashboardNextDate').textContent = nextDate.toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+    select('#dashboardNextDay').textContent = nextDate.toLocaleDateString('en-US', {
+      weekday: 'long'
+    });
+    select('#dashboardAppointmentStatus').textContent = nextAppointment.status || 'Pending';
+    select('#dashboardAppointmentTime').textContent =
+      `${formatDate(nextAppointment.date)} · ${nextAppointment.time}`;
+    select('#dashboardQueue').textContent = nextAppointment.queue || '—';
+    select('#dashboardSidebarQueue').textContent = nextAppointment.queue || '—';
+    select('#dashboardQueueStatus').textContent = nextAppointment.queue
+      ? 'On your appointment pass'
+      : 'Assigned when appointment is confirmed';
+    select('#dashboardWaitingTime').textContent =
+      `${formatDate(nextAppointment.date)} · ${nextAppointment.time}`;
+  } else {
+    select('#dashboardNotifications').setAttribute('aria-label', 'No upcoming appointment reminders');
+  }
+
+  const search = select('#dashboardSearch');
+  const appointmentsBox = select('#dashboardAppointments');
+
+  function renderAppointments() {
+    const query = search.value.trim().toLowerCase();
+    const orderedAppointments = [
+      ...activeAppointments,
+      ...appointments.filter(appt =>
+        !activeAppointments.includes(appt)
+      ).sort((first, second) =>
+        appointmentDateTime(second) - appointmentDateTime(first)
+      )
+    ];
+    const matches = orderedAppointments.filter(appt => {
+      const office = (OFFICE_DETAILS[appt.type] || {}).window || '';
+      return `${appt.type} ${appt.date} ${appt.time} ${appt.queue || ''} ${appt.status || ''} ${office}`
+        .toLowerCase().includes(query);
+    }).slice(0, 3);
+
+    appointmentsBox.innerHTML = matches.map(appt => {
+      const date = new Date(appt.date + 'T00:00');
+      const cancelled = appt.status === 'Cancelled';
+      const completed = !cancelled && (appt.status === 'Completed' || isPast(appt));
+      const statusText = cancelled ? 'Cancelled' : completed ? 'Completed' : (appt.status || 'Pending');
+      const statusClass = cancelled ? 'cancelled' : completed ? 'done' :
+        statusText.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const office = (OFFICE_DETAILS[appt.type] || {}).window || 'Campus appointment';
+      return `<a class="appointment-row" href="my-schedule.html" aria-label="View ${escapeHtml(appt.type)} on ${formatDate(appt.date)}">
+        <span class="date-box">
+          <b>${escapeHtml(date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase())}</b>
+          <strong>${date.getDate()}</strong>
+        </span>
+        <span class="appt-info">
+          <b>${escapeHtml(appt.type)}</b>
+          <small>${escapeHtml(appt.time)}<br>${escapeHtml(office)}</small>
+        </span>
+        <span class="status ${statusClass}">${escapeHtml(statusText)}</span>
+        <span class="appointment-arrow" aria-hidden="true">›</span>
+      </a>`;
+    }).join('');
+
+    if (!matches.length) {
+      const message = query
+        ? 'No appointments match your search.'
+        : 'No appointments yet. Book an appointment to get started.';
+      appointmentsBox.innerHTML = `<p class="empty-appointments">${message}</p>`;
+    }
+  }
+
+  function renderCalendar() {
+    const monthStart = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
+    const calendarStart = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth(),
+      1 - monthStart.getDay()
+    );
+    const appointmentDates = new Set(appointments
+      .filter(appt => appt.status !== 'Cancelled')
+      .map(appt => appt.date));
+    const currentDate = todayString();
+    select('#dashboardMonth').textContent = visibleMonth.toLocaleDateString('en-US', {
+      month: 'long', year: 'numeric'
+    });
+
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      .map(day => `<span>${day}</span>`).join('');
+    const days = Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate() + index);
+      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const inCurrentMonth = date.getMonth() === visibleMonth.getMonth();
+      const hasAppointment = appointmentDates.has(dateKey);
+      const isToday = dateKey === currentDate;
+      const disabled = !hasAppointment && (dateKey < currentDate || date.getDay() === 0 || date.getDay() === 6);
+      const label = date.toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+      });
+      return `<button type="button" class="calendar-day${inCurrentMonth ? '' : ' muted'}${isToday ? ' today' : ''}${hasAppointment ? ' has-appointment' : ''}" data-dashboard-day="${dateKey}" aria-label="${label}${hasAppointment ? ', has appointment' : ''}" ${disabled ? 'disabled' : ''}>${date.getDate()}</button>`;
+    }).join('');
+    select('#dashboardCalendar').innerHTML = weekdays + days;
+  }
+
+  function renderReminders() {
+    const reminders = select('#dashboardReminders');
+    if (!nextAppointment) {
+      reminders.innerHTML = '<p class="empty-appointments">No upcoming appointment reminders.</p>';
+      return;
+    }
+
+    const details = OFFICE_DETAILS[nextAppointment.type] || {};
+    reminders.innerHTML = `
+      <div class="notice">
+        <b><span class="new-tag">UPCOMING</span> ${escapeHtml(nextAppointment.type)}</b>
+        <p>${escapeHtml(formatDate(nextAppointment.date))} at ${escapeHtml(nextAppointment.time)}${details.window ? ` · ${escapeHtml(details.window)}` : ''}</p>
+        <small>Appointment reminder</small>
+      </div>
+      <div class="notice">
+        <b><span class="new-tag">REMINDER</span> Prepare your documents</b>
+        <p>${(details.docs || ['Valid CTU Student ID Card']).map(escapeHtml).join(', ')}</p>
+        <small>Before your appointment</small>
+      </div>`;
+  }
+
+  search.addEventListener('input', renderAppointments);
+  select('#dashboardNotifications').onclick = () => {
+    showToast(nextAppointment
+      ? `Next appointment: ${formatDate(nextAppointment.date)} at ${nextAppointment.time}.`
+      : 'You have no upcoming appointment reminders.');
+  };
+  select('#dashboardPreviousMonth').onclick = () => {
+    visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
+    renderCalendar();
+  };
+  select('#dashboardNextMonth').onclick = () => {
+    visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1);
+    renderCalendar();
+  };
+  select('#dashboardCalendar').addEventListener('click', event => {
+    const day = event.target.closest('[data-dashboard-day]');
+    if (!day || day.disabled) return;
+    const date = day.dataset.dashboardDay;
+    if (appointments.some(appt => appt.date === date)) {
+      goTo('my-schedule');
+      return;
+    }
+    sessionStorage.setItem('ee_dashboard_booking_date', date);
+    goTo('book-appointment');
+  });
+
+  renderAppointments();
+  renderCalendar();
+  renderReminders();
+}
 
 /* 5. Book appointment */
 PAGES['book-appointment'] = {
@@ -796,6 +1107,15 @@ PAGES['book-appointment'] = {
       select('#continueButton').disabled = !time;
     });
 
+    const dashboardDate = sessionStorage.getItem('ee_dashboard_booking_date');
+    if (dashboardDate) {
+      sessionStorage.removeItem('ee_dashboard_booking_date');
+      if (dashboardDate >= todayString()) {
+        select('#date').value = dashboardDate;
+        select('#date').dispatchEvent(new Event('change'));
+      }
+    }
+
     select('#continueButton').onclick = () => {
       if (!chosenDate || !chosenTime) return showError('book', 'Select a date and an available time.');
       sessionStorage.setItem('ee_draft', JSON.stringify({
@@ -835,8 +1155,12 @@ PAGES['appointment-summary'] = {
           'Student Name': user ? user.name : 'Enrolled Student',
           'Student ID': user ? user.sid : '2024-00123',
           'Section': user ? (user.section || 'BSIT 2-A') : 'BSIT 2-A',
+          'Course / Program': draft.program || (user ? user.program : '—'),
+          'Year Level': draft.yearLevel || (user ? user.year : '—'),
+          'Term': draft.term || '—',
           'Appointment Date': formatDate(draft.date),
           'Scheduled Time': draft.time,
+          'Time Period': draft.period || '—',
           'Designated Window': details.window || 'Administration Building'
         })}
 
@@ -879,6 +1203,10 @@ PAGES['appointment-summary'] = {
         type: draft.type,
         date: draft.date,
         time: draft.time,
+        period: draft.period,
+        program: draft.program,
+        yearLevel: draft.yearLevel,
+        term: draft.term,
         queue: qNum,
         status: 'Confirmed'
       };
@@ -915,7 +1243,43 @@ PAGES.confirmation = {
   }
 };
 
-/* 8. My schedule */
+/* 8. Queue numbers */
+PAGES['queue-number'] = {
+  render() {
+    const upcoming = myAppointments()
+      .filter(appt => appt.status !== 'Cancelled' && !isPast(appt))
+      .sort((a, b) => appointmentDateTime(a) - appointmentDateTime(b));
+
+    const tickets = upcoming.map(appt => {
+      const details = OFFICE_DETAILS[appt.type] || {};
+      return `
+        <article class="card queue-ticket">
+          <div class="queue-ticket-number">
+            <span class="muted">YOUR QUEUE NUMBER</span>
+            <strong>${escapeHtml(appt.queue || 'Not assigned')}</strong>
+          </div>
+          <div class="queue-ticket-details">
+            <h2>${escapeHtml(appt.type)}</h2>
+            <p>${escapeHtml(formatDate(appt.date))} · ${escapeHtml(appt.time)}</p>
+            <p>📍 ${escapeHtml(details.window || 'Administration Building')}</p>
+            <span class="badge">${escapeHtml(appt.status || 'Confirmed')}</span>
+          </div>
+        </article>`;
+    }).join('');
+
+    return withSidebar(`
+      <h1>Queue Number</h1>
+      <p class="queue-page-intro">Your queue number is linked to your upcoming appointment.</p>
+      ${tickets || `
+        <div class="card queue-empty">
+          <h2>No active queue number</h2>
+          <p class="muted">Book and confirm an appointment to receive your queue number.</p>
+          <a class="btn" href="book-appointment.html">Book an appointment</a>
+        </div>`}`);
+  }
+};
+
+/* 9. My schedule */
 PAGES['my-schedule'] = {
   render() {
     const active = myAppointments().filter(a => a.status !== 'Cancelled');
@@ -936,8 +1300,8 @@ PAGES['my-schedule'] = {
       </div>`;
 
     return withSidebar(`
-      <h1>My Schedule</h1>
-      <h2>Upcoming Appointments</h2>
+      <h1>My Appointment</h1>
+      <h2 id="queue-number">Upcoming Appointments</h2>
       ${upcoming.map(a => card(a, true)).join('') ||
         '<div class="card muted">Nothing booked yet. <a href="book-appointment.html">Book an appointment</a></div>'}
       <h2 class="sec">Past Appointments</h2>
@@ -1273,11 +1637,17 @@ PAGES.profile = {
             <dt>Enrollment Date</dt><dd>${user.enrolled ? formatDate(user.enrolled) : 'October 15, 2024'}</dd>
           </dl>
         </div>
+        <div class="card sec profile-actions">
+          <h3>Account</h3>
+          <p class="muted">Sign out of your student account on this device.</p>
+          <button type="button" class="btn alt" id="profileLogout">Logout</button>
+        </div>
       </div>
     `);
   },
 
   setup() {
+    select('#profileLogout').onclick = logout;
     select('#openEditContactBtn').onclick = () => {
       const user = currentUser();
       const popup = showModal(`
@@ -1366,7 +1736,7 @@ PAGES.settings = {
         </div>
       </div>
 
-      <div class="sec"><button class="btn alt" id="settingsLogout">Logout</button></div>`);
+      `);
   },
 
   setup() {
@@ -1384,8 +1754,6 @@ PAGES.settings = {
       saveData('ee_theme', theme);
       document.documentElement.dataset.theme = theme;
     };
-
-    select('#settingsLogout').onclick = logout;
 
     // Change Password Modal Trigger
     select('#openPasswordModal').onclick = () => {
@@ -1436,16 +1804,23 @@ const needsLogin = !PAGES_WITHOUT_LOGIN.includes(currentPage);
 if (needsLogin && !loggedIn) {
   flashMessage('Please log in to continue.');
   goTo('login');
-} else if (loggedIn && (currentPage === 'login' || currentPage === 'register')) {
+} else if (loggedIn && currentPage === 'register') {
   goTo('dashboard');
 } else {
   const page = PAGES[currentPage];
   const usesStaticLoginShell = currentPage === 'login' && Boolean(select('#loginForm'));
-  const html = usesStaticLoginShell ? '' : page.render(); // returns '' when it redirects away
-  if (!usesStaticLoginShell) {
+  const usesStaticRegisterShell = currentPage === 'register' && Boolean(select('#registerForm'));
+  const usesStaticDashboard = currentPage === 'dashboard' && Boolean(select('.app-shell'));
+  const usesExistingMarkup = usesStaticLoginShell || usesStaticRegisterShell || usesStaticDashboard;
+  const html = usesExistingMarkup ? '' : page.render(); // returns '' when it redirects away
+  if (!usesExistingMarkup) {
     select('#app').innerHTML = html;
   }
-  if (usesStaticLoginShell) {
+  if (usesStaticDashboard) {
+    page.setup();
+  } else if (usesStaticRegisterShell) {
+    page.setup();
+  } else if (usesStaticLoginShell) {
     page.setup();
     const passwordInput = select('#loginPassword');
     const passwordToggle = select('#togglePassword');
@@ -1464,9 +1839,6 @@ if (needsLogin && !loggedIn) {
   // Sidebar buttons (only exist on logged-in pages)
   const menuButton = select('#menuButton');
   if (menuButton) menuButton.onclick = () => select('#sidebar').classList.toggle('open');
-  const sidebarLogout = select('#sidebarLogout');
-  if (sidebarLogout) sidebarLogout.onclick = event => { event.preventDefault(); logout(); };
-
   // Show a message left by the previous page
   const message = sessionStorage.getItem('ee_flash');
   if (message) {

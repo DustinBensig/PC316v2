@@ -161,6 +161,13 @@ body {
     margin-bottom: 32px;
 }
 
+.login-error {
+    margin: -18px 0 18px 6px;
+    color: #ffe1e1;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 /* INPUT FIELDS */
 
 .input-box {

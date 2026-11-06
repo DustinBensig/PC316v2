@@ -28,11 +28,9 @@
 
             <section class="welcome">
                 <h1>Welcome Back,</h1>
-                <h2>Student!</h2>
+                <h2>Student or Admin!</h2>
                 <p>
-                    Log in to your account to book your<br>
-                    enrollment appointment, check your<br>
-                    queue number, and stay updated.
+                    Sign in as a student to book an appointment, or as an administrator to access your assigned dashboard.
                 </p>
             </section>
 
@@ -41,19 +39,19 @@
                 <div class="card-heading">
                     <h2>Log In</h2>
                     <p>
-                        Access your account and continue<br>
-                        your enrollment journey.
+                        Sign in to your student or administrator account.
                     </p>
                 </div>
 
                 <form action="#" method="post" id="loginForm" novalidate>
+                    <div id="login-error" class="login-error" role="alert" aria-live="polite" hidden></div>
 
                     <div class="input-box">
                         <i class="fa-solid fa-user"></i>
                         <input type="text"
                                id="loginId"
                                name="loginId"
-                               placeholder="Email Address or Student ID"
+                               placeholder="Email, Student ID, or Admin Email"
                                required>
                     </div>
 
@@ -90,6 +88,7 @@
     </div>
     <div id="app"></div>
     <script src="entry.js"></script>
-    <script src="script.js"></script>
+    <script src="admin-login/admin-login.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>

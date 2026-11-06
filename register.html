@@ -12,7 +12,7 @@
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 
-<body>
+<body data-page="register">
 
     <div class="page">
 
@@ -104,21 +104,23 @@
                         Fill in your details to create your account.
                     </p>
 
-                    <form>
+                    <form id="registerForm" novalidate>
 
                         <!-- Row 1 -->
                         <div class="form-row">
 
                             <div class="input-group">
-                                <label>Full Name</label>
+                                <label for="regName">Full Name</label>
 
-                                <input type="text">
+                                <input type="text" id="regName" autocomplete="name" aria-describedby="error-regName">
+                                <div class="form-error err" id="error-regName" role="alert"></div>
                             </div>
 
                             <div class="input-group">
-                                <label>Student ID Number</label>
+                                <label for="regSid">Student ID / LRN</label>
 
-                                <input type="text">
+                                <input type="text" id="regSid" autocomplete="off" aria-describedby="error-regSid">
+                                <div class="form-error err" id="error-regSid" role="alert"></div>
                             </div>
 
                         </div>
@@ -128,37 +130,69 @@
                         <div class="form-row">
 
                             <div class="input-group">
-                                <label>Email Address</label>
+                                <label for="regEmail">Email Address</label>
 
-                                <input type="email">
+                                <input type="email" id="regEmail" autocomplete="email" aria-describedby="error-regEmail">
+                                <div class="form-error err" id="error-regEmail" role="alert"></div>
                             </div>
 
                             <div class="input-group">
-                                <label>Phone Number</label>
+                                <label for="regContact">Phone Number</label>
 
-                                <input type="tel">
+                                <input type="tel" id="regContact" autocomplete="tel" aria-describedby="error-regContact">
+                                <div class="form-error err" id="error-regContact" role="alert"></div>
+
                             </div>
 
                         </div>
 
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label for="regProgram">Course / Program</label>
+                                <select id="regProgram" aria-describedby="error-regProgram">
+                                    <option value="">Select course / program</option>
+                                    <option>BS Information Technology</option>
+                                    <option>BS Computer Science</option>
+                                    <option>BS Information Systems</option>
+                                    <option>BS Hospitality Management</option>
+                                    <option>BS Industrial Technology</option>
+                                    <option>BS Education</option>
+                                </select>
+                                <div class="form-error err" id="error-regProgram" role="alert"></div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="regYear">Year Level</label>
+                                <select id="regYear" aria-describedby="error-regYear">
+                                    <option value="">Select year level</option>
+                                    <option>1st Year</option>
+                                    <option>2nd Year</option>
+                                    <option>3rd Year</option>
+                                    <option>4th Year</option>
+                                </select>
+                                <div class="form-error err" id="error-regYear" role="alert"></div>
+                            </div>
+                        </div>
 
                         <!-- Row 3 -->
                         <div class="form-row">
 
                             <div class="input-group password-group">
-                                <label>Password</label>
+                                <label for="regPassword">Password</label>
 
-                                <input type="password">
+                                <input type="password" id="regPassword" autocomplete="new-password" aria-describedby="error-regPassword">
+                                <div class="form-error err" id="error-regPassword" role="alert"></div>
 
-                                <i class="fa-solid fa-eye password-eye"></i>
+                                <i class="fa-solid fa-eye password-eye" role="button" tabindex="0" aria-label="Show password"></i>
                             </div>
 
                             <div class="input-group password-group">
-                                <label>Confirm Password</label>
+                                <label for="regConfirm">Confirm Password</label>
 
-                                <input type="password">
+                                <input type="password" id="regConfirm" autocomplete="new-password" aria-describedby="error-regConfirm">
+                                <div class="form-error err" id="error-regConfirm" role="alert"></div>
 
-                                <i class="fa-solid fa-eye password-eye"></i>
+                                <i class="fa-solid fa-eye password-eye" role="button" tabindex="0" aria-label="Show password"></i>
                             </div>
 
                         </div>
@@ -183,5 +217,7 @@
 
     </div>
 
+    <script src="entry.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>
