@@ -24,9 +24,10 @@ try {
         ], 429);
     }
     $query = $database->prepare(
-        'SELECT u.id, u.password_hash
+        'SELECT u.id, u.password_hash, campuses.campus_name
          FROM users AS u
          INNER JOIN students AS s ON s.user_id = u.id
+         LEFT JOIN campuses ON campuses.campus_id = s.campus_id
          WHERE (u.email = ? OR s.student_number = ?)
            AND u.account_type = \'student\' AND u.is_active = 1
          LIMIT 1'
@@ -36,6 +37,9 @@ try {
     if (!$account || !password_verify($password, $account['password_hash'])) {
         auth_rate_limit_record_attempt($database, 'student-login', $loginId);
         student_json_response(['success' => false, 'message' => 'The email/student number or password is incorrect.'], 401);
+    }
+    if ($account['campus_name'] !== 'Daanbantayan Campus') {
+        student_campus_access_denied();
     }
 
     auth_rate_limit_clear($database, 'student-login', $loginId);

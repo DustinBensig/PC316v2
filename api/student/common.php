@@ -116,10 +116,13 @@ function student_profile(PDO $database, int $userId): ?array
 {
     $query = $database->prepare(
         'SELECT u.id AS user_id, u.email, u.first_name, u.last_name, u.is_active,
+                u.phone,
                 s.id AS student_id, s.student_number, s.program, s.year_level,
-                s.academic_status
+                s.middle_name, s.academic_status, s.student_status, s.campus_id,
+                campuses.campus_name
          FROM users AS u
          INNER JOIN students AS s ON s.user_id = u.id
+         LEFT JOIN campuses ON campuses.campus_id = s.campus_id
          WHERE u.id = ? AND u.account_type = \'student\' AND u.is_active = 1
          LIMIT 1'
     );
@@ -130,14 +133,26 @@ function student_profile(PDO $database, int $userId): ?array
 
 function student_public_profile(array $profile): array
 {
+    $assignment = enrollment_year_assignment((string)($profile['year_level'] ?? ''));
+    $name = trim(implode(' ', array_filter([
+        $profile['first_name'] ?? '',
+        $profile['middle_name'] ?? '',
+        $profile['last_name'] ?? '',
+    ], static fn($part): bool => trim((string)$part) !== '')));
+
     return [
-        'name' => trim($profile['first_name'] . ' ' . $profile['last_name']),
+        'name' => $name,
         'sid' => $profile['student_number'],
         'email' => $profile['email'],
+        'contact' => $profile['phone'] ?? '',
         'program' => $profile['program'],
         'year' => $profile['year_level'] ?: '',
         'yearLevel' => $profile['year_level'] ?: '',
-        'status' => $profile['academic_status'],
+        'status' => $profile['student_status'] ?? 'Inactive',
+        'academicStatus' => $profile['academic_status'],
+        'campus' => $profile['campus_name'] ?? '',
+        'assignedEnrollmentWeek' => $assignment ? 'Week ' . $assignment['week_number'] : '',
+        'assignedWeek' => $assignment ? 'Week ' . $assignment['week_number'] : '',
     ];
 }
 
@@ -148,7 +163,18 @@ function student_require_profile(PDO $database): array
     if (!$profile) {
         student_json_response(['success' => false, 'message' => 'Student sign-in is required.'], 401);
     }
+    if (($profile['campus_name'] ?? null) !== 'Daanbantayan Campus') {
+        student_campus_access_denied();
+    }
     return $profile;
+}
+
+function student_campus_access_denied(): void
+{
+    student_json_response([
+        'success' => false,
+        'message' => 'Access denied. This enrollment system is exclusively for CTU Daanbantayan Campus students.',
+    ], 403);
 }
 
 function student_send_appointment_email(array $profile, array $appointment, string $event): bool

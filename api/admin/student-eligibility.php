@@ -14,6 +14,7 @@ if (!in_array($method, ['GET', 'POST'], true)) {
 try {
     $database = admin_database();
     $admin = require_admin_api($database);
+    require_admin_permission($database, $admin, 'students.update');
 
     if ($method === 'GET') {
         $studentNumber = trim(is_string($_GET['studentNumber'] ?? null) ? $_GET['studentNumber'] : '');
@@ -409,10 +410,11 @@ function admin_student_eligibility_record(PDO $database, string $studentNumber):
                 s.academic_status, u.first_name, u.last_name, u.email, u.is_active
          FROM students AS s
          INNER JOIN users AS u ON u.id = s.user_id
-         WHERE s.student_number = ?
+         INNER JOIN campuses ON campuses.campus_id = s.campus_id
+         WHERE s.student_number = ? AND campuses.campus_name = ?
          LIMIT 1'
     );
-    $studentQuery->execute([$studentNumber]);
+    $studentQuery->execute([$studentNumber, 'Daanbantayan Campus']);
     $student = $studentQuery->fetch();
     if (!$student) {
         return null;

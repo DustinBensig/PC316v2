@@ -19,10 +19,14 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: data.get('name'),
+          studentId: data.get('studentId'),
+          firstName: data.get('firstName'),
+          middleName: data.get('middleName'),
+          lastName: data.get('lastName'),
           email: data.get('email'),
           phone: data.get('phone'),
           program: data.get('program'),
+          yearLevel: data.get('yearLevel'),
           password: data.get('password'),
           confirmPassword: data.get('confirmPassword')
         })

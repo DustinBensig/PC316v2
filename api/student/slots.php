@@ -56,6 +56,20 @@ try {
         ]);
     }
 
+    $currentDateQuery = $database->prepare('SELECT CURRENT_DATE');
+    $currentDateQuery->execute();
+    $currentDate = (string)$currentDateQuery->fetchColumn();
+    if ($currentDate < $schedule['start_date'] || $currentDate > $schedule['end_date']) {
+        student_json_response([
+            'success' => true,
+            'eligible' => true,
+            'student' => student_public_profile($profile),
+            'schedule' => $schedule,
+            'slots' => [],
+            'message' => 'You can only book an appointment during your assigned enrollment week.',
+        ]);
+    }
+
     $activeQuery = $database->prepare(
         'SELECT 1
          FROM appointments AS a
@@ -89,7 +103,7 @@ try {
                     0,
                     LEAST(
                         slots.capacity - COUNT(booked.id),
-                        capacity.daily_capacity - COALESCE(daily.daily_booked, 0)
+                        LEAST(150, capacity.daily_capacity) - COALESCE(daily.daily_booked, 0)
                     )
                 ) AS remaining
          FROM enrollment_appointment_slots AS slots
@@ -133,8 +147,8 @@ try {
             'time' => substr($row['slot_time'], 0, 5),
             'remaining' => (int)$row['remaining'],
             'dailyBooked' => (int)$row['daily_booked'],
-            'dailyCapacity' => (int)$row['daily_capacity'],
-            'dailyRemaining' => max(0, (int)$row['daily_capacity'] - (int)$row['daily_booked']),
+            'dailyCapacity' => min(150, (int)$row['daily_capacity']),
+            'dailyRemaining' => max(0, min(150, (int)$row['daily_capacity']) - (int)$row['daily_booked']),
         ];
     }, $query->fetchAll());
 

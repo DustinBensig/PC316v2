@@ -46,8 +46,6 @@ try {
            AND u.is_active = 1
            AND a.is_active = 1
            AND a.deactivated_at IS NULL
-           AND r.role_key = \'SHARED_ADMIN\'
-           AND a.department_id IS NULL
          LIMIT 1'
     );
     $statement->execute([$username]);

@@ -97,8 +97,26 @@ function read_json_request(): array
 
 function admin_role_assignment_is_valid(array $admin): bool
 {
-    return ($admin['role_key'] ?? null) === 'SHARED_ADMIN' &&
-        ($admin['department_id'] ?? null) === null;
+    $roleKey = $admin['role_key'] ?? null;
+    $departmentCode = $admin['department_code'] ?? null;
+    if (in_array($roleKey, ['SHARED_ADMIN', 'MIS'], true)) {
+        return ($admin['department_id'] ?? null) === null;
+    }
+
+    $departmentByRole = [
+        'SSG_ADMIN' => 'SSG',
+        'CODETECH_ADMIN' => 'CodeTech',
+        'COED_ADMIN' => 'COED',
+        'HM_ADMIN' => 'HM',
+        'BIT_ADMIN' => 'BIT',
+        'REGISTRAR_ADMIN' => 'Registrar',
+        'CLINIC_ADMIN' => 'Clinic',
+        'CASHIER_ADMIN' => 'Cashier',
+        'GUIDANCE_ADMIN' => 'Guidance',
+    ];
+    return is_string($roleKey) && isset($departmentByRole[$roleKey]) &&
+        $departmentCode === $departmentByRole[$roleKey] &&
+        $admin['department_id'] !== null;
 }
 
 function current_admin(PDO $database): ?array
@@ -121,8 +139,6 @@ function current_admin(PDO $database): ?array
            AND u.is_active = 1
            AND a.is_active = 1
            AND a.deactivated_at IS NULL
-           AND r.role_key = \'SHARED_ADMIN\'
-           AND a.department_id IS NULL
          LIMIT 1'
     );
     $statement->execute([$userId]);
@@ -137,7 +153,7 @@ function current_admin(PDO $database): ?array
         return null;
     }
 
-    if ($admin['role_key'] !== 'SHARED_ADMIN' || !admin_role_assignment_is_valid($admin)) {
+    if (!admin_role_assignment_is_valid($admin)) {
         unset($_SESSION['admin_user_id'], $_SESSION['admin_password_fingerprint']);
         return null;
     }
@@ -157,35 +173,74 @@ function require_admin_api(PDO $database): array
     return $admin;
 }
 
-function admin_can_read_appointments(PDO $database, array $admin): bool
+function admin_has_permission(PDO $database, array $admin, string $permission): bool
 {
-    // Shared administrators are intentionally granted all appointment access.
-    // current_admin() currently admits only SHARED_ADMIN, so the permission lookup is reserved for other roles.
-    if ($admin['role_key'] === 'SHARED_ADMIN') {
-        return true;
-    }
-
+    $area = explode('.', $permission, 2)[0];
     $statement = $database->prepare(
         'SELECT 1 FROM role_permissions
-         WHERE role_id = ? AND permission_key = ?
+         WHERE role_id = ? AND permission_key IN (?, ?, \'system.*\')
          LIMIT 1'
     );
-    $statement->execute([$admin['role_id'], 'appointments.read.assigned']);
+    $statement->execute([
+        (int)$admin['role_id'],
+        $permission,
+        $area . '.*',
+    ]);
     return (bool)$statement->fetchColumn();
+}
+
+function require_admin_permission(PDO $database, array $admin, string $permission): void
+{
+    if (!admin_has_permission($database, $admin, $permission)) {
+        admin_json_response([
+            'success' => false,
+            'message' => 'You are not authorized to perform this action.',
+        ], 403);
+    }
+}
+
+function admin_can_read_students(PDO $database, array $admin): bool
+{
+    return admin_has_permission($database, $admin, 'students.read') ||
+        admin_has_permission($database, $admin, 'students.read.assigned');
+}
+
+function admin_can_manage_students(PDO $database, array $admin): bool
+{
+    return admin_has_permission($database, $admin, 'students.write');
+}
+
+function admin_can_read_section(PDO $database, array $admin, string $section): bool
+{
+    switch ($section) {
+        case 'appointments':
+            return admin_can_read_appointments($database, $admin);
+        case 'eligibility':
+        case 'eligibility-records':
+            return admin_has_permission($database, $admin, 'students.update');
+        case 'students':
+            return admin_can_read_students($database, $admin);
+        case 'enrollments':
+            return admin_has_permission($database, $admin, 'enrollment_records.read');
+        case 'clearances':
+            return admin_has_permission($database, $admin, 'clearances.read') ||
+                admin_has_permission($database, $admin, 'clearances.medical.read') ||
+                admin_has_permission($database, $admin, 'clearances.guidance.read');
+        case 'payments':
+            return admin_has_permission($database, $admin, 'payments.read');
+        default:
+            return false;
+    }
+}
+
+function admin_can_read_appointments(PDO $database, array $admin): bool
+{
+    return admin_has_permission($database, $admin, 'appointments.read') ||
+        admin_has_permission($database, $admin, 'appointments.read.assigned');
 }
 
 function admin_can_update_appointments(PDO $database, array $admin): bool
 {
-    // Keep status-update access consistent with the shared administrator policy above.
-    if ($admin['role_key'] === 'SHARED_ADMIN') {
-        return true;
-    }
-
-    $statement = $database->prepare(
-        'SELECT 1 FROM role_permissions
-         WHERE role_id = ? AND permission_key = ?
-         LIMIT 1'
-    );
-    $statement->execute([$admin['role_id'], 'appointments.update.assigned']);
-    return (bool)$statement->fetchColumn();
+    return admin_has_permission($database, $admin, 'appointments.update') ||
+        admin_has_permission($database, $admin, 'appointments.update.assigned');
 }

@@ -390,14 +390,14 @@ function withSidebar(content) {
   return `
     <div class="shell">
       <aside class="side" id="sidebar">
-        <div class="logo">Enroll<span>Ease</span></div>
+        <div class="logo">CTU <span>Daanbantayan Campus</span></div>
         ${links}
         <a href="#" id="sidebarLogout">🚪 Logout</a>
       </aside>
       <main class="main">
         <div class="top">
           <button class="burger" id="menuButton" aria-label="Menu">☰</button>
-          <b class="logo">EnrollEase</b>
+          <b class="logo">CTU Daanbantayan Campus Enrollment System</b>
         </div>
         ${content}
       </main>
@@ -432,7 +432,7 @@ PAGES.index = {
 PAGES.login = {
   render: () => `
     <div class="auth"><form class="card" id="loginForm" novalidate>
-      <div class="logo center">Enroll<span>Ease</span></div>
+      <div class="logo center">CTU Daanbantayan Campus</div>
       <h2 class="center">Welcome back</h2>
       <p class="muted center">Sign in with your registered student account.</p>
       ${inputField('loginId', 'Email Address or Student ID')}
@@ -598,9 +598,11 @@ PAGES['book-appointment'] = {
       profile = profile || currentUser() || { name: 'Student', sid: '' };
       const checks = eligibility.checks || [];
       resultBox.innerHTML = `<h2>${eligibility.eligible ? 'You are qualified to book' : 'Enrollment Appointment Not Available'}</h2>
-        <p>Student information verified: ${escapeHtml(profile.name)} · ${escapeHtml(profile.sid)}</p>
-        <p>Year level: ${escapeHtml(profile.yearLevel || profile.year || 'Not on file')}
-          ${schedule ? ` · Enrollment Week ${Number(schedule.week_number)}: ${escapeHtml(formatDate(schedule.start_date))} – ${escapeHtml(formatDate(schedule.end_date))}` : ''}</p>
+        <p>Name: ${escapeHtml(profile.name)} · Student ID: ${escapeHtml(profile.sid)}</p>
+        <p>Program: ${escapeHtml(profile.program || 'Not on file')} · Campus: ${escapeHtml(profile.campus || 'Not on file')}</p>
+        <p>Year level: ${escapeHtml(profile.yearLevel || profile.year || 'Not on file')} · Student status: ${escapeHtml(profile.status || 'Not on file')}</p>
+        <p>Assigned Enrollment Week: ${escapeHtml(profile.assignedEnrollmentWeek || 'Not available')}
+          ${schedule ? ` · ${escapeHtml(formatDate(schedule.start_date))} – ${escapeHtml(formatDate(schedule.end_date))}` : ''}</p>
         ${eligibility.eligible ? '<p>All enrollment requirements are currently satisfied.</p>' : '<p>You are currently not qualified for enrollment because:</p>'}
         <ul>${checks.map(check => `<li>${check.passed ? '✓' : '✗'} ${escapeHtml(check.label)}
           ${(check.reasons || []).length ? `<ul>${check.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
@@ -1024,8 +1026,9 @@ PAGES.enrollment = {
           'Name': user.name || 'Not set',
           'Program': user.program || 'Not set',
           'Year level': user.year || 'Not set',
-          'Enrollment status': user.status || 'Not set',
-          'Campus': user.campus || 'Not set'
+          'Student status': user.status || 'Not set',
+          'Campus': user.campus || 'Not set',
+          'Assigned Enrollment Week': user.assignedEnrollmentWeek || 'Not assigned'
         })}
         <p class="muted">Course, fee, and registration details are not available through the current student API.</p>
       </div>`);
@@ -1068,11 +1071,13 @@ PAGES.profile = {
           <dl class="profile-dl">
             <dt>Student ID</dt><dd class="font-mono"><b>${escapeHtml(user.sid)}</b></dd>
             <dt>Degree Program</dt><dd>${escapeHtml(user.program)}</dd>
-            <dt>Year & Section</dt><dd><b>${escapeHtml(user.year)} · ${escapeHtml(section)}</b></dd>
+            <dt>Year Level</dt><dd><b>${escapeHtml(user.year)}</b></dd>
+            <dt>Campus</dt><dd>${escapeHtml(user.campus || 'Not set')}</dd>
+            <dt>Assigned Enrollment Week</dt><dd>${escapeHtml(user.assignedEnrollmentWeek || 'Not assigned')}</dd>
             <dt>Institutional Email</dt><dd id="displayEmail">${escapeHtml(user.email)}</dd>
             <dt>Contact Number</dt><dd id="displayContact">${user.contact ? escapeHtml(user.contact) : '<span class="muted">Not provided</span>'}</dd>
-            <dt>Academic Standing</dt><dd>${escapeHtml(academicStatus)}</dd>
-            <dt>Enrollment Status</dt><dd>${escapeHtml(academicStatus)}</dd>
+            <dt>Student Status</dt><dd>${escapeHtml(academicStatus)}</dd>
+            <dt>Academic Status</dt><dd>${escapeHtml(user.academicStatus || 'Not set')}</dd>
             <dt>Enrollment Date</dt><dd>${user.enrolled ? formatDate(user.enrolled) : 'Not set'}</dd>
           </dl>
         </div>
@@ -1085,10 +1090,11 @@ PAGES.profile = {
       const user = currentUser();
       const popup = showModal(`
         <h3 style="margin-top:0;">Update Contact Information</h3>
-        <p class="muted" style="margin-bottom:14px; font-size:13px;">Academic records (ID, Name, Section) are locked by Registrar. You may update your contact details below.</p>
+        <p class="muted" style="margin-bottom:14px; font-size:13px;">Student ID, campus, year level, and enrollment week are protected. You may update your email and contact number.</p>
         <form id="contactEditForm" novalidate>
           ${inputField('editEmail', 'Email Address', 'email', user.email)}
           ${inputField('editContact', 'Contact Number', 'tel', user.contact || '')}
+          <p id="contactEditMessage" class="err" role="alert"></p>
           <div class="row" style="margin-top: 16px; gap: 10px;">
             <button type="button" class="btn alt" id="cancelContactEdit" style="flex: 1;">Cancel</button>
             <button type="submit" class="btn" style="flex: 1;">Save Changes</button>
@@ -1097,7 +1103,7 @@ PAGES.profile = {
       `);
 
       popup.querySelector('#cancelContactEdit').onclick = () => popup.remove();
-      popup.querySelector('#contactEditForm').onsubmit = event => {
+      popup.querySelector('#contactEditForm').onsubmit = async event => {
         event.preventDefault();
         clearErrors();
         const email = popup.querySelector('#editEmail').value.trim();
@@ -1105,24 +1111,45 @@ PAGES.profile = {
 
         let valid = true;
         if (!/^\S+@\S+\.\S+$/.test(email)) valid = showError('editEmail', 'Enter a valid email address.');
-        if (contact && !/^[\d\s+-]{7,}$/.test(contact)) valid = showError('editContact', 'Enter a valid contact number.');
+        if (contact && !/^[\d\s()+-]{7,32}$/.test(contact)) valid = showError('editContact', 'Enter a valid contact number.');
         if (!valid) return;
 
-        const users = allUsers();
-        const target = users.find(u => u.sid === user.sid);
-        if (target) {
-          target.email = email;
-          target.contact = contact;
-          saveData('ee_users', users);
+        const saveButton = popup.querySelector('button[type="submit"]');
+        const message = popup.querySelector('#contactEditMessage');
+        saveButton.disabled = true;
+        try {
+          const response = await studentFetch('api/student/profile.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': sessionStorage.getItem('ee_csrf') || ''
+            },
+            body: JSON.stringify({ email, contactNumber: contact })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            message.textContent = result.message || 'Contact information could not be updated.';
+            return;
+          }
+          const users = allUsers();
+          const target = users.find(u => u.sid === user.sid);
+          if (target) {
+            target.email = email;
+            target.contact = contact;
+            saveData('ee_users', users);
+          }
+          const elEmail = select('#displayEmail');
+          const elContact = select('#displayContact');
+          if (elEmail) elEmail.textContent = email;
+          if (elContact) elContact.textContent = contact || 'Not provided';
+          popup.remove();
+          showToast(result.message || 'Contact information updated successfully.');
+        } catch (error) {
+          message.textContent = 'The contact information could not be updated. Please try again.';
+        } finally {
+          saveButton.disabled = false;
         }
-
-        const elEmail = select('#displayEmail');
-        const elContact = select('#displayContact');
-        if (elEmail) elEmail.textContent = email;
-        if (elContact) elContact.textContent = contact || 'Not provided';
-
-        popup.remove();
-        showToast('Contact information saved.');
       };
     };
   }
@@ -1244,16 +1271,32 @@ PAGES.settings = {
 
 
 /* ---------- 8. START THE APP ---------- */
-const loggedIn = Boolean(currentUser());
 const needsLogin = !PAGES_WITHOUT_LOGIN.includes(currentPage);
 
-if (needsLogin && !loggedIn) {
-  flashMessage('Please log in to continue.');
-  goTo('login');
-} else if (loggedIn && (currentPage === 'login' || currentPage === 'register')) {
-  goTo('dashboard');
-} else {
+const startApplication = async () => {
+  if (needsLogin) {
+    try {
+      const response = await studentFetch('api/student/session.php', { credentials: 'same-origin' });
+      const result = await response.json();
+      if (!response.ok || !result.success || !result.profile) {
+        clearStudentSession();
+        flashMessage(result.message || 'Please log in to continue.');
+        goTo('login');
+        return;
+      }
+      sessionStorage.setItem('ee_csrf', result.csrfToken);
+      saveData('ee_users', [result.profile]);
+      sessionStorage.setItem('ee_session', result.profile.sid);
+    } catch (error) {
+      clearStudentSession();
+      flashMessage('The student session could not be verified. Please sign in again.');
+      goTo('login');
+      return;
+    }
+  }
+
   const page = PAGES[currentPage];
+  if (!page) return;
   const usesStaticLoginShell = currentPage === 'login' && Boolean(select('#loginForm'));
   const html = usesStaticLoginShell ? '' : page.render(); // returns '' when it redirects away
   if (!usesStaticLoginShell) {
@@ -1287,4 +1330,6 @@ if (needsLogin && !loggedIn) {
     sessionStorage.removeItem('ee_flash');
     showToast(message);
   }
-}
+};
+
+startApplication();

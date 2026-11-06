@@ -50,9 +50,11 @@ function enrollment_eligibility(PDO $database, int $studentId): array
     }
 
     $studentQuery = $database->prepare(
-        'SELECT s.academic_status, s.year_level, u.is_active, u.first_name, u.last_name, s.student_number,
-                s.program, u.email
+        'SELECT s.academic_status, s.student_status, s.year_level, s.campus_id,
+                u.is_active, u.first_name, u.last_name, s.student_number,
+                s.program, u.email, campuses.campus_name
          FROM students AS s INNER JOIN users AS u ON u.id = s.user_id
+         LEFT JOIN campuses ON campuses.campus_id = s.campus_id
          WHERE s.id = ? LIMIT 1'
     );
     $studentQuery->execute([$studentId]);
@@ -71,14 +73,27 @@ function enrollment_eligibility(PDO $database, int $studentId): array
         ];
     }
     $add('student', 'Student information verified',
-        (bool)$student['is_active'] && trim($student['student_number']) !== '' &&
+        (bool)$student['is_active'] && $student['campus_name'] === 'Daanbantayan Campus' &&
+        preg_match('/\A824[0-9]{4}\z/', (string)$student['student_number']) === 1 &&
         trim($student['first_name'] . $student['last_name']) !== '' && filter_var($student['email'], FILTER_VALIDATE_EMAIL),
-        ['Student account or required student information is incomplete.'],
+        [
+            $student['campus_name'] !== 'Daanbantayan Campus'
+                ? 'Access denied. This enrollment system is exclusively for CTU Daanbantayan Campus students.'
+                : 'Student account or required student information is incomplete.',
+        ],
         [
             'Name: ' . trim($student['first_name'] . ' ' . $student['last_name']),
             'Student number: ' . $student['student_number'],
             'Email: ' . $student['email'],
         ]);
+
+    $add(
+        'student_account_status',
+        'Student account status',
+        $student['student_status'] === 'Active',
+        ['Your student account is currently inactive. Please contact the registrar.'],
+        ['Current student account status: ' . ($student['student_status'] ?? 'not set')]
+    );
 
     $yearAssignment = enrollment_year_assignment((string)($student['year_level'] ?? ''));
     $add(

@@ -22,6 +22,10 @@ try {
         header('Location: ' . $loginUrl, true, 303);
         exit;
     }
+    if (!admin_has_permission($database, $admin, 'system.write')) {
+        http_response_code(403);
+        exit('You are not authorized to perform this action.');
+    }
 
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         verify_request_origin();

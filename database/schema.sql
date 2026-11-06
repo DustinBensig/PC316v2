@@ -31,6 +31,16 @@ CREATE TABLE departments (
   UNIQUE KEY uq_departments_name (department_name)
 ) ENGINE=InnoDB;
 
+CREATE TABLE campuses (
+  campus_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  campus_name VARCHAR(120) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (campus_id),
+  UNIQUE KEY uq_campuses_name (campus_name)
+) ENGINE=InnoDB;
+
+INSERT INTO campuses (campus_name) VALUES ('Daanbantayan Campus');
+
 CREATE TABLE users (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   username VARCHAR(64) NULL,
@@ -55,8 +65,11 @@ CREATE TABLE students (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
   student_number VARCHAR(7) NULL,
+  middle_name VARCHAR(100) NULL,
   program VARCHAR(150) NOT NULL,
   year_level VARCHAR(40) NULL,
+  campus_id BIGINT UNSIGNED NOT NULL DEFAULT 1,
+  student_status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
   department_id BIGINT UNSIGNED NOT NULL,
   academic_status ENUM('applicant', 'active', 'inactive', 'graduated', 'dropped', 'suspended', 'enrolling', 'enrolled') NOT NULL DEFAULT 'applicant',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -65,12 +78,49 @@ CREATE TABLE students (
   UNIQUE KEY uq_students_user (user_id),
   UNIQUE KEY uq_students_number (student_number),
   KEY ix_students_department_status (department_id, academic_status),
+  KEY ix_students_campus_status (campus_id, student_status),
   CONSTRAINT chk_students_number_format CHECK (student_number IS NULL OR student_number REGEXP '^824[0-9]{4}$'),
   CONSTRAINT fk_students_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT fk_students_department FOREIGN KEY (department_id) REFERENCES departments (id)
+  CONSTRAINT fk_students_department FOREIGN KEY (department_id) REFERENCES departments (id),
+  CONSTRAINT fk_students_campus FOREIGN KEY (campus_id) REFERENCES campuses (campus_id),
+  CONSTRAINT chk_students_year_level CHECK (
+    year_level IS NULL OR LOWER(TRIM(year_level)) IN (
+      '1st year', '2nd year', '3rd year', '4th year',
+      'first year', 'second year', 'third year', 'fourth year',
+      'first', 'second', 'third', 'fourth'
+    )
+  )
 ) ENGINE=InnoDB;
 
 ALTER TABLE students AUTO_INCREMENT = 8240000;
+
+DELIMITER //
+CREATE TRIGGER trg_students_daanbantayan_insert
+BEFORE INSERT ON students
+FOR EACH ROW
+BEGIN
+  DECLARE selected_campus VARCHAR(120);
+  SELECT campus_name INTO selected_campus
+  FROM campuses WHERE campus_id = NEW.campus_id;
+  IF selected_campus IS NULL OR selected_campus <> 'Daanbantayan Campus' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Students may only be registered at Daanbantayan Campus.';
+  END IF;
+END//
+
+CREATE TRIGGER trg_students_daanbantayan_update
+BEFORE UPDATE ON students
+FOR EACH ROW
+BEGIN
+  DECLARE selected_campus VARCHAR(120);
+  SELECT campus_name INTO selected_campus
+  FROM campuses WHERE campus_id = NEW.campus_id;
+  IF selected_campus IS NULL OR selected_campus <> 'Daanbantayan Campus' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Students may only be assigned to Daanbantayan Campus.';
+  END IF;
+END//
+DELIMITER ;
 
 CREATE TABLE grades (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -454,6 +504,21 @@ CREATE TABLE activity_logs (
   CONSTRAINT fk_activity_user FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT fk_activity_role FOREIGN KEY (actor_role_id) REFERENCES roles (id) ON DELETE SET NULL,
   CONSTRAINT fk_activity_department FOREIGN KEY (department_id) REFERENCES departments (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE admin_audit_logs (
+  log_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  admin_id BIGINT UNSIGNED NULL,
+  student_id BIGINT UNSIGNED NULL,
+  action VARCHAR(40) NOT NULL,
+  old_data JSON NULL,
+  new_data JSON NULL,
+  date_created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (log_id),
+  KEY ix_admin_audit_student_date (student_id, date_created),
+  KEY ix_admin_audit_admin_date (admin_id, date_created),
+  CONSTRAINT fk_admin_audit_admin FOREIGN KEY (admin_id) REFERENCES admins (id) ON DELETE SET NULL,
+  CONSTRAINT fk_admin_audit_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 INSERT INTO roles (role_key, role_name, description) VALUES

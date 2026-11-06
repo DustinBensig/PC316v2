@@ -17,7 +17,7 @@ $sections = [
     'appointments' => 'Enrollment appointments',
     'eligibility' => 'Eligibility rules',
     'eligibility-records' => 'Student eligibility records',
-    'students' => 'Students',
+    'students' => 'Student Management',
     'enrollments' => 'Enrollment records',
     'clearances' => 'Clearances',
     'payments' => 'Payments',
@@ -26,7 +26,7 @@ $sectionDescriptions = [
     'appointments' => 'Search enrollment appointments, review eligibility, and update appointment status.',
     'eligibility' => 'View and enable or disable enrollment eligibility checks.',
     'eligibility-records' => 'Update student eligibility records and immediately review the booking checks.',
-    'students' => 'Search registered students and review their account and program information.',
+    'students' => 'Search, review, add, edit, activate, and deactivate Daanbantayan Campus student accounts.',
     'enrollments' => 'Review submitted enrollment records and their current status.',
     'clearances' => 'Review student clearance records across all offices.',
     'payments' => 'Review payment records across all offices.',
@@ -52,8 +52,12 @@ try {
         exit;
     }
 
-    $canRead = admin_can_read_appointments($database, $admin);
+    $canRead = admin_can_read_section($database, $admin, $section);
     $canUpdate = admin_can_update_appointments($database, $admin);
+    $canManageStudents = admin_can_manage_students($database, $admin);
+    $canReadAudit = admin_has_permission($database, $admin, 'activity_logs.read') &&
+        admin_can_read_students($database, $admin);
+    $canManageSystem = admin_has_permission($database, $admin, 'system.write');
     $errorMessage = '';
 
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
@@ -70,7 +74,7 @@ try {
             $errorMessage = 'Required enrollment eligibility checks cannot be disabled.';
         } elseif (!$canUpdate) {
             http_response_code(403);
-            $errorMessage = 'The shared administrator cannot update appointment statuses for this request.';
+            $errorMessage = 'You are not authorized to perform this action.';
         } else {
             $appointmentId = filter_var($_POST['appointment_id'] ?? null, FILTER_VALIDATE_INT);
             $newStatusCode = $_POST['status_code'] ?? '';
@@ -83,15 +87,23 @@ try {
                 try {
                     $database->beginTransaction();
                     $recordSql = 'SELECT a.id, a.student_id, a.reference_number, a.scheduled_at,
-                                         a.appointment_status_id, s.year_level
+                                         a.appointment_status_id, s.year_level, s.department_id
                                   FROM appointments AS a
                                   INNER JOIN students AS s ON s.id = a.student_id
-                                  WHERE a.id = ? FOR UPDATE';
+                                  INNER JOIN campuses ON campuses.campus_id = s.campus_id
+                                  WHERE a.id = ? AND campuses.campus_name = \'Daanbantayan Campus\'
+                                  FOR UPDATE';
                     $recordQuery = $database->prepare($recordSql);
                     $recordQuery->execute([$appointmentId]);
                     $record = $recordQuery->fetch();
                     if (!$record) {
                         throw new RuntimeException('The appointment record was not found.');
+                    }
+                    if (
+                        !admin_has_permission($database, $admin, 'appointments.update') &&
+                        (int)$record['department_id'] !== (int)$admin['department_id']
+                    ) {
+                        throw new RuntimeException('You are not authorized to perform this action.');
                     }
 
                     $statusQuery = $database->prepare(
@@ -163,7 +175,10 @@ try {
                         if (!$slot) {
                             throw new RuntimeException('The selected enrollment appointment time is unavailable.');
                         }
-                        if (enrollment_daily_active_count($database, $candidateDate, (int)$appointmentId) >= (int)$scheduleDay['daily_capacity']) {
+                        if (
+                            enrollment_daily_active_count($database, $candidateDate, (int)$appointmentId) >=
+                            min(150, (int)$scheduleDay['daily_capacity'])
+                        ) {
                             throw new RuntimeException('The selected enrollment date is full (150 of 150 students).');
                         }
                         if (enrollment_slot_active_count($database, $candidateDate, $candidateTime, (int)$appointmentId) >= (int)$slot['capacity']) {
@@ -323,8 +338,15 @@ try {
     $eligibilityRulesQuery->execute();
     $eligibilityRules = $eligibilityRulesQuery->fetchAll();
     if ($canRead && $section === 'appointments') {
-        $where = ['a.appointment_type = \'Enrollment Appointment\''];
+        $where = [
+            'a.appointment_type = \'Enrollment Appointment\'',
+            'campuses.campus_name = \'Daanbantayan Campus\'',
+        ];
         $params = [];
+        if (!admin_has_permission($database, $admin, 'appointments.read')) {
+            $where[] = 's.department_id = ?';
+            $params[] = (int)$admin['department_id'];
+        }
         if ($search !== '') {
             $where[] = '(CONCAT(u.first_name, \' \', u.last_name) LIKE ?
                          OR u.email LIKE ?
@@ -357,6 +379,7 @@ try {
                 FROM appointments AS a
                 INNER JOIN students AS s ON s.id = a.student_id
                 INNER JOIN users AS u ON u.id = s.user_id
+                INNER JOIN campuses ON campuses.campus_id = s.campus_id
                 INNER JOIN departments AS d ON d.id = a.department_id
                 INNER JOIN appointment_status AS st ON st.id = a.appointment_status_id';
         if ($where) {
@@ -368,23 +391,7 @@ try {
         $appointments = $query->fetchAll();
     }
 
-    if ($section === 'students') {
-        $query = $database->prepare(
-            'SELECT s.student_number, s.program, s.year_level, s.academic_status,
-                    d.department_name, u.first_name, u.last_name, u.email,
-                    u.is_active, u.created_at
-             FROM students AS s
-             INNER JOIN users AS u ON u.id = s.user_id
-             INNER JOIN departments AS d ON d.id = s.department_id
-             WHERE (? = \'\' OR CONCAT(u.first_name, \' \', u.last_name) LIKE ?
-                    OR u.email LIKE ? OR s.student_number LIKE ? OR s.program LIKE ?)
-             ORDER BY u.created_at DESC
-             LIMIT 250'
-        );
-        $like = '%' . $search . '%';
-        $query->execute([$search, $like, $like, $like, $like]);
-        $records = $query->fetchAll();
-    } elseif ($section === 'enrollments') {
+    if ($canRead && $section === 'enrollments') {
         $query = $database->prepare(
             'SELECT e.id, e.academic_year, e.semester, e.enrollment_status,
                     e.confirmed_at, e.notes, u.first_name, u.last_name,
@@ -392,7 +399,9 @@ try {
              FROM enrollment_records AS e
              INNER JOIN students AS s ON s.id = e.student_id
              INNER JOIN users AS u ON u.id = s.user_id
-             WHERE (? = \'\' OR CONCAT(u.first_name, \' \', u.last_name) LIKE ?
+             INNER JOIN campuses ON campuses.campus_id = s.campus_id
+             WHERE campuses.campus_name = \'Daanbantayan Campus\'
+               AND (? = \'\' OR CONCAT(u.first_name, \' \', u.last_name) LIKE ?
                     OR s.student_number LIKE ? OR s.program LIKE ?)
              ORDER BY e.created_at DESC
              LIMIT 250'
@@ -400,26 +409,34 @@ try {
         $like = '%' . $search . '%';
         $query->execute([$search, $like, $like, $like]);
         $records = $query->fetchAll();
-    } elseif ($section === 'clearances') {
-        $query = $database->prepare(
+    } elseif ($canRead && $section === 'clearances') {
+        $clearanceSql =
             'SELECT c.clearance_status, c.reviewed_at, c.notes,
                     req.requirement_name, d.department_name,
                     u.first_name, u.last_name, s.student_number, s.program
              FROM clearance_records AS c
              INNER JOIN students AS s ON s.id = c.student_id
              INNER JOIN users AS u ON u.id = s.user_id
+             INNER JOIN campuses ON campuses.campus_id = s.campus_id
              INNER JOIN requirements AS req ON req.id = c.requirement_id
              INNER JOIN departments AS d ON d.id = req.department_id
-             WHERE (? = \'\' OR CONCAT(u.first_name, \' \', u.last_name) LIKE ?
+             WHERE campuses.campus_name = \'Daanbantayan Campus\'
+               AND (? = \'\' OR CONCAT(u.first_name, \' \', u.last_name) LIKE ?
                     OR s.student_number LIKE ? OR req.requirement_name LIKE ?
-                    OR d.department_name LIKE ?)
-             ORDER BY c.updated_at DESC
-             LIMIT 250'
-        );
+                    OR d.department_name LIKE ?)';
         $like = '%' . $search . '%';
-        $query->execute([$search, $like, $like, $like, $like]);
+        $clearanceParameters = [$search, $like, $like, $like, $like];
+        if (!admin_has_permission($database, $admin, 'clearances.read')) {
+            $clearanceSql .= ' AND d.department_code = ?';
+            $clearanceParameters[] = admin_has_permission($database, $admin, 'clearances.medical.read')
+                ? 'Clinic'
+                : 'Guidance';
+        }
+        $clearanceSql .= ' ORDER BY c.updated_at DESC LIMIT 250';
+        $query = $database->prepare($clearanceSql);
+        $query->execute($clearanceParameters);
         $records = $query->fetchAll();
-    } elseif ($section === 'payments') {
+    } elseif ($canRead && $section === 'payments') {
         $query = $database->prepare(
             'SELECT p.receipt_number, p.amount, p.currency, p.payment_status,
                     p.payment_method, p.paid_at, p.notes, u.first_name,
@@ -427,7 +444,9 @@ try {
              FROM payments AS p
              INNER JOIN students AS s ON s.id = p.student_id
              INNER JOIN users AS u ON u.id = s.user_id
-             WHERE (? = \'\' OR CONCAT(u.first_name, \' \', u.last_name) LIKE ?
+             INNER JOIN campuses ON campuses.campus_id = s.campus_id
+             WHERE campuses.campus_name = \'Daanbantayan Campus\'
+               AND (? = \'\' OR CONCAT(u.first_name, \' \', u.last_name) LIKE ?
                     OR s.student_number LIKE ? OR p.receipt_number LIKE ?)
              ORDER BY p.created_at DESC
              LIMIT 250'
@@ -442,6 +461,9 @@ try {
     $admin = null;
     $canRead = false;
     $canUpdate = false;
+    $canManageStudents = false;
+    $canReadAudit = false;
+    $canManageSystem = false;
     $appointments = [];
     $statusList = [];
     $search = '';
@@ -470,7 +492,7 @@ function h($value): string
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f7fb">
-  <title>Admin dashboard | EnrollEase</title>
+  <title>CTU Daanbantayan Campus Enrollment System | Admin dashboard</title>
   <link rel="stylesheet" href="../admin-dashboard.css">
   <style>
     .content { max-width: 1500px; }
@@ -486,11 +508,27 @@ function h($value): string
     .alert { margin-bottom: 15px; padding: 11px 13px; border-radius: 8px; color: #9c3842; background: #fff0f0; }
     .logout-form { margin: 0; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .student-dialog { width: min(680px, calc(100vw - 28px)); max-height: 90vh; margin: auto; padding: 22px; border: 0; border-radius: 12px; box-shadow: 0 18px 60px #10233f55; }
+    .student-dialog::backdrop { background: #10233f88; }
+    .student-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .student-editor h2, .student-editor .panel-caption, .student-editor .student-dialog-message, .student-dialog-actions, .student-editor dl { grid-column: 1 / -1; }
+    .student-editor label { display: grid; gap: 5px; font-size: 13px; font-weight: 600; }
+    .student-editor input, .student-editor select { width: 100%; min-height: 38px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
+    .student-editor dl { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 8px; }
+    .student-editor dd { margin: 0; }
+    .student-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .student-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+    #student-audit-panel { margin-top: 24px; }
+    #student-audit-panel pre { max-width: 260px; max-height: 180px; overflow: auto; white-space: pre-wrap; }
     @media (max-width: 700px) {
       .topbar { height: auto; min-height: 72px; flex-wrap: wrap; padding: 14px 18px; }
       .topbar-right { width: 100%; justify-content: space-between; }
       .content { padding: 22px 16px 35px; }
       .page-heading { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 520px) {
+      .student-editor { grid-template-columns: 1fr; }
+      .student-editor h2, .student-editor .panel-caption, .student-editor .student-dialog-message, .student-dialog-actions, .student-editor dl { grid-column: 1; }
     }
   </style>
 </head>
@@ -501,15 +539,19 @@ function h($value): string
     <div class="nav-label">Administration</div>
     <nav class="nav-list" aria-label="Admin navigation">
       <?php foreach ($sections as $key => $label): ?>
-        <a class="nav-link <?= $section === $key ? 'active' : '' ?>" href="dashboard.php?section=<?= h($key) ?>"><span class="nav-icon"><?= h($sectionIcons[$key]) ?></span><?= h($label) ?></a>
+        <?php if (admin_can_read_section($database, $admin, $key)): ?>
+          <a class="nav-link <?= $section === $key ? 'active' : '' ?>" href="dashboard.php?section=<?= h($key) ?>"><span class="nav-icon"><?= h($sectionIcons[$key]) ?></span><?= h($label) ?></a>
+        <?php endif; ?>
       <?php endforeach; ?>
-      <a class="nav-link" href="schedules.php"><span class="nav-icon">▣</span>Schedules and capacity</a>
+      <?php if ($canManageSystem): ?>
+        <a class="nav-link" href="schedules.php"><span class="nav-icon">▣</span>Schedules and capacity</a>
+      <?php endif; ?>
     </nav>
     <div class="sidebar-bottom">
       <div class="role-card">
-        <small>Shared administrator</small>
+        <small><?= h($admin['role_name']) ?></small>
         <strong><?= h($admin['name']) ?></strong>
-        <span class="role-badge">Administrator</span>
+        <span class="role-badge"><?= h($admin['role_name']) ?></span>
       </div>
     </div>
   </aside>
@@ -652,6 +694,54 @@ function h($value): string
           </div>
           <p class="panel-caption" style="margin-top:14px">Appointments are retained for audit history. Use the Cancelled status instead of deleting a record.</p>
         </section>
+        <?php elseif ($section === 'students'): ?>
+        <section class="panel" id="student-management"
+                 data-csrf="<?= h($_SESSION['admin_csrf_token']) ?>"
+                 data-can-manage="<?= $canManageStudents ? 'true' : 'false' ?>"
+                 data-can-audit="<?= $canReadAudit ? 'true' : 'false' ?>">
+          <div class="toolbar">
+            <p class="panel-caption">Search and filter Daanbantayan Campus student accounts (maximum 250).</p>
+            <div class="toolbar">
+              <?php if ($canManageStudents): ?><button class="button primary" type="button" id="add-student-button">+ Add Student</button><?php endif; ?>
+              <?php if ($canReadAudit): ?><button class="button" type="button" id="student-audit-toggle">Audit Logs</button><?php endif; ?>
+            </div>
+          </div>
+          <form class="filter-form" id="student-search">
+            <label class="sr-only" for="student-search-query">Search students</label>
+            <input id="student-search-query" name="q" type="search" maxlength="100" value="<?= h($search) ?>" placeholder="Search name, student ID, email, or program">
+            <label for="student-status-filter">Status</label>
+            <select id="student-status-filter" name="status">
+              <option value="">All statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+            <label for="student-year-filter">Year level</label>
+            <select id="student-year-filter" name="yearLevel">
+              <option value="">All year levels</option>
+              <option value="1st Year">1st Year</option>
+              <option value="2nd Year">2nd Year</option>
+              <option value="3rd Year">3rd Year</option>
+              <option value="4th Year">4th Year</option>
+            </select>
+            <button class="button primary" type="submit">Apply filters</button>
+          </form>
+          <p id="student-management-message" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Student ID</th><th>Name</th><th>Program</th><th>Year Level</th><th>Campus</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="student-table-body"><tr><td colspan="7" class="empty-state">Loading students…</td></tr></tbody>
+            </table>
+          </div>
+          <section id="student-audit-panel" hidden aria-label="Student audit logs">
+            <h2>Student audit logs</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Date</th><th>Administrator</th><th>Student ID</th><th>Action</th><th>Old information</th><th>New information</th></tr></thead>
+                <tbody id="student-audit-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
         <?php else: ?>
         <section class="panel">
           <div class="toolbar">
@@ -664,29 +754,7 @@ function h($value): string
             </form>
           </div>
           <div class="table-wrap">
-            <?php if ($section === 'students'): ?>
-              <table>
-                <thead><tr><th>Student</th><th>Email</th><th>Program</th><th>Year</th><th>Department</th><th>Academic status</th><th>Account</th><th>Registered</th></tr></thead>
-                <tbody>
-                  <?php if (!$records): ?><tr><td colspan="8" class="empty-state">No student records match this search.</td></tr>
-                  <?php else: foreach ($records as $record): ?>
-                    <tr>
-                      <td>
-                        <strong><?= h(trim($record['first_name'] . ' ' . $record['last_name'])) ?></strong><br>
-                        <span class="student-id"><?= h($record['student_number']) ?></span><br>
-                        <?php if ($record['student_number'] !== null): ?>
-                          <a class="button small" href="dashboard.php?section=eligibility-records&amp;student_number=<?= rawurlencode((string)$record['student_number']) ?>">Edit eligibility</a>
-                        <?php endif; ?>
-                      </td>
-                      <td><?= h($record['email']) ?></td><td><?= h($record['program']) ?></td>
-                      <td><?= h($record['year_level'] ?: '—') ?></td><td><?= h($record['department_name']) ?></td>
-                      <td><?= h($record['academic_status']) ?></td><td><?= $record['is_active'] ? 'Active' : 'Inactive' ?></td>
-                      <td><?= h($record['created_at']) ?></td>
-                    </tr>
-                  <?php endforeach; endif; ?>
-                </tbody>
-              </table>
-            <?php elseif ($section === 'enrollments'): ?>
+            <?php if ($section === 'enrollments'): ?>
               <table>
                 <thead><tr><th>Student</th><th>Program</th><th>Academic year</th><th>Semester</th><th>Status</th><th>Confirmed</th><th>Notes</th></tr></thead>
                 <tbody>
@@ -742,6 +810,8 @@ function h($value): string
 </div>
 <?php if ($section === 'eligibility-records'): ?>
   <script src="../js/admin-eligibility.js" defer></script>
+<?php elseif ($section === 'students' && $canRead): ?>
+  <script src="../js/admin-students.js" defer></script>
 <?php endif; ?>
 </body>
 </html>

@@ -1,6 +1,6 @@
-# EnrollEase
+# CTU Daanbantayan Campus Enrollment System
 
-EnrollEase is a PHP/PDO and MySQL student enrollment appointment system. Its browser interface is served from the project directory; student and administrator actions are handled by PHP APIs.
+This is the Cebu Technological University – Daanbantayan Campus student enrollment appointment system. Its browser interface is served from the project directory; student and administrator actions are handled by PHP/PDO APIs.
 
 ## XAMPP setup
 
@@ -8,8 +8,8 @@ EnrollEase is a PHP/PDO and MySQL student enrollment appointment system. Its bro
 2. Start **Apache** and **MySQL** in the XAMPP Control Panel. This project is expected at `http://localhost:8888/PC316v2/`.
 3. Configure the local database settings. Copy `config\database.example.php` to `config\database.php` if the local config is missing. Defaults are MySQL at `127.0.0.1:3306`, database `enrollment_system`, user `root`, and a blank password. The actual config is ignored by Git.
 4. Open phpMyAdmin and import `database\schema.sql`. It creates/selects `enrollment_system` and creates the complete schema and example enrollment schedules. **Fresh setup = import `database/schema.sql` (creates `enrollment_system`), then optionally `database/enrollment_system.sql` for test students.** The fixture depends on the schema and must be imported second.
-5. To re-import the fresh schema or its fixtures, first drop the existing `enrollment_system` database in phpMyAdmin, then repeat the import order. Do not import `database/enrollment-appointments-migration.sql` or `database/shared-admin-migration.sql` into a fresh database created from `schema.sql`.
-6. For an existing database with the outdated student columns, back it up and inspect the existing `students.student_number` values. Run `database/migrations/20261106_align_student_registration_schema.sql` only after confirming all populated student numbers are seven digits beginning with `824`; the migration stops before alteration if it finds incompatible values. Apply `database/migrations/20261106_create_auth_rate_limits.sql` to an existing database to enable persistent login/registration rate limiting.
+5. To rebuild a disposable development database, import the fresh schema and its fixtures in the order above. Do not drop a database containing records you need to preserve. Do not import `database/enrollment-appointments-migration.sql` or `database/shared-admin-migration.sql` into a fresh database created from `schema.sql`.
+6. For an existing database, back it up and inspect its student records first. If it has the older student schema, run `database/migrations/20261106_align_student_registration_schema.sql` only after confirming existing Student IDs are seven digits beginning with `824`. Then apply `database/migrations/20261106_daanbantayan_student_management.sql` to add the Daanbantayan campus relationship, account status, year-level constraint, and admin audit log while preserving students and appointments. Apply `database/migrations/20261106_create_auth_rate_limits.sql` as well if rate limiting is not already configured. These migrations do not drop or recreate the database.
 7. Open `http://localhost:8888/PC316v2/api/student/session.php` in a browser. Without a student session it should return JSON containing `"Student sign-in is required."`.
 8. Create the shared administrator account from PowerShell:
 
@@ -53,7 +53,7 @@ Students can reschedule or cancel active enrollment appointments from **My Sched
 
 Appointments are committed before email is attempted. A missing PHPMailer installation or SMTP configuration produces an explicit email warning, but does not undo a successful booking.
 
-The shared administrator dashboard includes **Student eligibility records**. Search by student number or use **Edit eligibility** in the Students results to update year level, academic status, required subjects and grades, financial records, holds, enrollment requirements, and required-document statuses. Changes are saved in one transaction, written to `activity_logs`, and followed by a fresh eligibility check. The dashboard API requires the administrator session and CSRF token; only the shared administrator role is currently admitted.
+The administrator dashboard includes **Student Management** for authorized main administrators: search and filter campus students, add and edit accounts, activate or deactivate accounts, and inspect audit logs. Student IDs must be seven digits beginning with `824`; year level determines the assigned enrollment week. Role-specific administrator pages and APIs check stored role permissions and department assignments. **Student eligibility records** remain available to administrators with student-update permission; changes continue to use a transaction and are recorded in the existing activity log.
 
 Rate limiting uses the database-backed `auth_rate_limits` table in the fresh schema. For an existing database, apply `database/migrations/20261106_create_auth_rate_limits.sql`. Login and registration requests are limited by both the client IP address and the normalized login identifier; retry responses include a `Retry-After` header and `retryAfter` seconds.
 

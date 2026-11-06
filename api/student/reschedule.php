@@ -27,12 +27,32 @@ try {
     $profile = student_require_profile($database);
     $database->beginTransaction();
 
-    $studentLock = $database->prepare('SELECT id FROM students WHERE id = ? AND user_id = ? FOR UPDATE');
+    $studentLock = $database->prepare(
+        'SELECT s.id, s.student_status, s.student_number, s.year_level,
+                campuses.campus_name
+         FROM students AS s
+         LEFT JOIN campuses ON campuses.campus_id = s.campus_id
+         WHERE s.id = ? AND s.user_id = ? FOR UPDATE'
+    );
     $studentLock->execute([(int)$profile['student_id'], (int)$profile['user_id']]);
-    if (!$studentLock->fetchColumn()) {
+    $lockedStudent = $studentLock->fetch();
+    if (!$lockedStudent) {
         $database->rollBack();
         student_json_response(['success' => false, 'message' => 'The student record could not be verified.'], 403);
     }
+    if ($lockedStudent['campus_name'] !== 'Daanbantayan Campus') {
+        $database->rollBack();
+        student_campus_access_denied();
+    }
+    if ($lockedStudent['student_status'] !== 'Active') {
+        $database->rollBack();
+        student_json_response([
+            'success' => false,
+            'message' => 'Your student account is currently inactive. Please contact the registrar.',
+        ], 403);
+    }
+    $profile['year_level'] = $lockedStudent['year_level'];
+    $profile['student_number'] = $lockedStudent['student_number'];
 
     $eligibility = enrollment_eligibility($database, (int)$profile['student_id']);
     if (!$eligibility['eligible']) {
@@ -74,7 +94,15 @@ try {
 
     $currentDateQuery = $database->prepare('SELECT CURRENT_DATE');
     $currentDateQuery->execute();
-    if ($date < (string)$currentDateQuery->fetchColumn()) {
+    $currentDate = (string)$currentDateQuery->fetchColumn();
+    if ($currentDate < $schedule['start_date'] || $currentDate > $schedule['end_date']) {
+        $database->rollBack();
+        student_json_response([
+            'success' => false,
+            'message' => 'You can only book an appointment during your assigned enrollment week.',
+        ], 403);
+    }
+    if ($date < $currentDate) {
         $database->rollBack();
         student_json_response(['success' => false, 'message' => 'Past enrollment dates cannot be selected.'], 400);
     }
@@ -153,9 +181,12 @@ try {
     }
 
     $dailyBooked = enrollment_daily_active_count($database, $date, $appointmentId);
-    if ($dailyBooked >= (int)$scheduleDay['daily_capacity']) {
+    if ($dailyBooked >= min(150, (int)$scheduleDay['daily_capacity'])) {
         $database->rollBack();
-        student_json_response(['success' => false, 'message' => 'This enrollment date is full. Please choose another date.'], 409);
+        student_json_response([
+            'success' => false,
+            'message' => 'Sorry, the appointment capacity for this date has been reached.',
+        ], 409);
     }
     if (enrollment_slot_active_count($database, $date, $time . ':00', $appointmentId) >= (int)$slot['capacity']) {
         $database->rollBack();

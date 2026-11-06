@@ -7,30 +7,54 @@ student_require_method('POST');
 student_verify_origin();
 $request = student_read_json();
 
-$name = trim(is_string($request['name'] ?? null) ? $request['name'] : '');
+$studentNumber = trim(is_string($request['studentId'] ?? null) ? $request['studentId'] : '');
+$firstName = trim(is_string($request['firstName'] ?? null) ? $request['firstName'] : '');
+$middleName = trim(is_string($request['middleName'] ?? null) ? $request['middleName'] : '');
+$lastName = trim(is_string($request['lastName'] ?? null) ? $request['lastName'] : '');
 $email = strtolower(trim(is_string($request['email'] ?? null) ? $request['email'] : ''));
 $phone = trim(is_string($request['phone'] ?? null) ? $request['phone'] : '');
 $program = trim(is_string($request['program'] ?? null) ? $request['program'] : '');
+$yearLevel = $request['yearLevel'] ?? null;
 $password = $request['password'] ?? null;
-$nameParts = preg_split('/\s+/', $name, 2) ?: [];
+$confirmPassword = $request['confirmPassword'] ?? null;
+$yearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
-if (count($nameParts) !== 2) {
-    student_json_response(['success' => false, 'message' => 'Enter your first name and last name.'], 400);
+if (
+    (array_key_exists('campus', $request) && $request['campus'] !== 'Daanbantayan Campus') ||
+    array_key_exists('campusId', $request) ||
+    array_key_exists('campus_id', $request)
+) {
+    student_campus_access_denied();
+}
+if (!preg_match('/\A824[0-9]{4}\z/', $studentNumber)) {
+    student_json_response([
+        'success' => false,
+        'message' => 'Invalid Student ID. Please enter a valid CTU Daanbantayan Campus Student ID.',
+    ], 400);
 }
 if (
-    strlen($nameParts[0]) > 100 || strlen($nameParts[1]) > 100 ||
-    !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190 || strlen($phone) > 32 ||
-    $program === '' || strlen($program) > 150 ||
-    !is_string($password) || strlen($password) < 8 || strlen($password) > 72
+    $firstName === '' || strlen($firstName) > 100 ||
+    $middleName === '' || strlen($middleName) > 100 ||
+    $lastName === '' || strlen($lastName) > 100 ||
+    !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190 ||
+    !preg_match('/\A[\d\s()+-]{7,32}\z/', $phone) ||
+    $program === '' || strlen($program) > 150
 ) {
-    student_json_response(['success' => false, 'message' => 'Enter valid student details and a password of 8 to 72 characters.'], 400);
+    student_json_response(['success' => false, 'message' => 'Complete all required student details with valid values.'], 400);
+}
+if (!is_string($yearLevel) || !in_array($yearLevel, $yearLevels, true)) {
+    student_json_response(['success' => false, 'message' => 'Please select a valid year level.'], 400);
 }
 if (
-    array_key_exists('confirmPassword', $request) &&
-    (!is_string($request['confirmPassword']) || !is_string($password) ||
-        !hash_equals($password, $request['confirmPassword']))
+    !is_string($password) || strlen($password) < 8 || strlen($password) > 72 ||
+    !is_string($confirmPassword) || !hash_equals($password, $confirmPassword)
 ) {
-    student_json_response(['success' => false, 'message' => 'Passwords do not match.'], 400);
+    student_json_response([
+        'success' => false,
+        'message' => !is_string($password) || strlen($password) < 8 || strlen($password) > 72
+            ? 'Enter a password of 8 to 72 characters.'
+            : 'Passwords do not match.',
+    ], 400);
 }
 
 try {
@@ -45,11 +69,30 @@ try {
         ], 429);
     }
     auth_rate_limit_record_attempt($database, 'student-register', $email);
-    $departmentQuery = $database->prepare('SELECT id FROM departments WHERE department_code = ? LIMIT 1');
+
+    $campusQuery = $database->prepare(
+        'SELECT campus_id FROM campuses WHERE campus_name = ? LIMIT 1'
+    );
+    $campusQuery->execute(['Daanbantayan Campus']);
+    $campusId = $campusQuery->fetchColumn();
+    $departmentQuery = $database->prepare(
+        'SELECT id FROM departments WHERE department_code = ? LIMIT 1'
+    );
     $departmentQuery->execute(['CodeTech']);
     $departmentId = $departmentQuery->fetchColumn();
-    if (!$departmentId) {
-        throw new RuntimeException('Student registration department is not configured.');
+    if (!$campusId || !$departmentId) {
+        throw new RuntimeException('Student registration campus or department is not configured.');
+    }
+
+    $existingId = $database->prepare('SELECT 1 FROM students WHERE student_number = ? LIMIT 1');
+    $existingId->execute([$studentNumber]);
+    if ($existingId->fetchColumn()) {
+        student_json_response(['success' => false, 'message' => 'This Student ID is already registered.'], 409);
+    }
+    $existingEmail = $database->prepare('SELECT 1 FROM users WHERE email = ? LIMIT 1');
+    $existingEmail->execute([$email]);
+    if ($existingEmail->fetchColumn()) {
+        student_json_response(['success' => false, 'message' => 'This email address is already registered.'], 409);
     }
 
     $database->beginTransaction();
@@ -60,42 +103,48 @@ try {
     $userQuery->execute([
         $email,
         password_hash($password, PASSWORD_DEFAULT),
-        $nameParts[0],
-        $nameParts[1],
-        $phone ?: null,
+        $firstName,
+        $lastName,
+        $phone,
     ]);
     $userId = (int)$database->lastInsertId();
     $studentQuery = $database->prepare(
-        'INSERT INTO students (user_id, student_number, program, year_level, department_id, academic_status)
-         VALUES (?, NULL, ?, NULL, ?, \'applicant\')'
+        'INSERT INTO students
+          (user_id, student_number, middle_name, program, year_level, campus_id,
+           student_status, department_id, academic_status)
+         VALUES (?, ?, ?, ?, ?, ?, \'Active\', ?, \'active\')'
     );
-    $studentQuery->execute([$userId, $program, (int)$departmentId]);
-    $studentId = (int)$database->lastInsertId();
-    if ($studentId < 8240000 || $studentId > 8249999) {
-        throw new RuntimeException('The seven-digit student ID range is exhausted or not configured. Apply the enrollment database migration.');
-    }
-    $assignNumber = $database->prepare('UPDATE students SET student_number = ? WHERE id = ?');
-    $assignNumber->execute([(string)$studentId, $studentId]);
+    $studentQuery->execute([
+        $userId,
+        $studentNumber,
+        $middleName,
+        $program,
+        $yearLevel,
+        (int)$campusId,
+        (int)$departmentId,
+    ]);
     $database->commit();
+    auth_rate_limit_clear($database, 'student-register', $email);
+
     student_json_response([
         'success' => true,
-        'studentId' => (string)$studentId,
-        'message' => 'Account created. Your Student ID is ' . $studentId . '. Your year level, student status, and enrollment records must be verified before an enrollment appointment can be booked.',
+        'studentId' => $studentNumber,
+        'message' => 'Account created successfully.',
     ], 201);
 } catch (Throwable $error) {
     if (isset($database) && $database->inTransaction()) {
         $database->rollBack();
     }
     error_log('Student registration failed: ' . $error->getMessage());
-    $duplicate = $error instanceof PDOException && $error->getCode() === '23000';
-    $payload = [
-        'success' => false,
-        'message' => $duplicate
-            ? 'That student number or email is already registered.'
-            : 'The registration service is unavailable.',
-    ];
-    if (!$duplicate) {
-        $payload = student_debug_error_detail($payload, $error);
+    if ($error instanceof PDOException && $error->getCode() === '23000') {
+        $detail = (string)($error->errorInfo[2] ?? '');
+        $message = str_contains($detail, 'student_number') || str_contains($detail, 'students_number')
+            ? 'This Student ID is already registered.'
+            : 'This email address is already registered.';
+        student_json_response(['success' => false, 'message' => $message], 409);
     }
-    student_json_response($payload, $duplicate ? 409 : 503);
+    student_json_response(
+        student_debug_error_detail(['success' => false, 'message' => 'The registration service is unavailable.'], $error),
+        503
+    );
 }
