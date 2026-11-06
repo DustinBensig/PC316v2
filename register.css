@@ -255,6 +255,18 @@ body {
     margin-top: 4px;
 }
 
+#registerMessage {
+    min-height: 0;
+    margin-top: 12px;
+    color: #ffe1e1;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+#registerMessage.success {
+    color: #d7ffe4;
+}
+
 .form-row {
 
     display: grid;
@@ -429,6 +441,11 @@ body {
         0 4px 10px rgba(0, 0, 0, 0.20);
 }
 
+.create-button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
 .create-button:active {
     transform: translateY(0);
 }
@@ -482,5 +499,26 @@ body {
 
     .create-button {
         width: 100%;
+    }
+}
+
+@media (max-width: 800px) {
+    .register-container {
+        max-width: 560px;
+    }
+
+    .left-panel {
+        padding: 27px 33px;
+    }
+
+    .right-panel {
+        padding: 32px 28px;
+    }
+}
+
+@media (max-width: 550px) {
+    .form-row {
+        margin-top: 18px;
+        margin-bottom: 12px;
     }
 }

@@ -106,49 +106,49 @@
 
                     <form id="registerForm" novalidate>
 
-                        <!-- Row 1 -->
                         <div class="form-row">
-
                             <div class="input-group">
-                                <label for="regName">Full Name</label>
-
-                                <input type="text" id="regName" autocomplete="name" aria-describedby="error-regName">
-                                <div class="form-error err" id="error-regName" role="alert"></div>
+                                <label for="regFirstName">First Name</label>
+                                <input type="text" id="regFirstName" autocomplete="given-name" maxlength="100" required aria-describedby="error-regFirstName">
+                                <div class="form-error err" id="error-regFirstName" role="alert"></div>
                             </div>
                             <div class="input-group">
-                                <label for="regSid">Student ID / LRN</label>
-
-                                <input type="text" id="regSid" autocomplete="off" aria-describedby="error-regSid">
-                                <div class="form-error err" id="error-regSid" role="alert"></div>
+                                <label for="regMiddleName">Middle Name</label>
+                                <input type="text" id="regMiddleName" autocomplete="additional-name" maxlength="100" required aria-describedby="error-regMiddleName">
+                                <div class="form-error err" id="error-regMiddleName" role="alert"></div>
                             </div>
-
                         </div>
 
-
-                        <!-- Row 2 -->
                         <div class="form-row">
+                            <div class="input-group">
+                                <label for="regLastName">Last Name</label>
+                                <input type="text" id="regLastName" autocomplete="family-name" maxlength="100" required aria-describedby="error-regLastName">
+                                <div class="form-error err" id="error-regLastName" role="alert"></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="regSid">Student ID</label>
+                                <input type="text" id="regSid" autocomplete="off" inputmode="numeric" maxlength="7" placeholder="8240000" required aria-describedby="error-regSid">
+                                <div class="form-error err" id="error-regSid" role="alert"></div>
+                            </div>
+                        </div>
 
+                        <div class="form-row">
                             <div class="input-group">
                                 <label for="regEmail">Email Address</label>
-
-                                <input type="email" id="regEmail" autocomplete="email" aria-describedby="error-regEmail">
+                                <input type="email" id="regEmail" autocomplete="email" maxlength="190" required aria-describedby="error-regEmail">
                                 <div class="form-error err" id="error-regEmail" role="alert"></div>
                             </div>
-
                             <div class="input-group">
                                 <label for="regContact">Phone Number</label>
-
-                                <input type="tel" id="regContact" autocomplete="tel" aria-describedby="error-regContact">
+                                <input type="tel" id="regContact" autocomplete="tel" maxlength="32" required aria-describedby="error-regContact">
                                 <div class="form-error err" id="error-regContact" role="alert"></div>
-
                             </div>
-
                         </div>
 
                         <div class="form-row">
                             <div class="input-group">
                                 <label for="regProgram">Course / Program</label>
-                                <select id="regProgram" aria-describedby="error-regProgram">
+                                <select id="regProgram" required aria-describedby="error-regProgram">
                                     <option value="">Select course / program</option>
                                     <option>BS Information Technology</option>
                                     <option>BS Computer Science</option>
@@ -159,10 +159,9 @@
                                 </select>
                                 <div class="form-error err" id="error-regProgram" role="alert"></div>
                             </div>
-
                             <div class="input-group">
                                 <label for="regYear">Year Level</label>
-                                <select id="regYear" aria-describedby="error-regYear">
+                                <select id="regYear" required aria-describedby="error-regYear">
                                     <option value="">Select year level</option>
                                     <option>1st Year</option>
                                     <option>2nd Year</option>
@@ -173,45 +172,28 @@
                             </div>
                         </div>
 
-                        <!-- Row 3 -->
                         <div class="form-row">
-
                             <div class="input-group password-group">
                                 <label for="regPassword">Password</label>
-
-                                <input type="password" id="regPassword" autocomplete="new-password" aria-describedby="error-regPassword">
+                                <input type="password" id="regPassword" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="error-regPassword">
                                 <div class="form-error err" id="error-regPassword" role="alert"></div>
-
-                                <i class="fa-solid fa-eye password-eye" role="button" tabindex="0" aria-label="Show password"></i>
+                                <i class="fa-solid fa-eye password-eye" role="button" tabindex="0" aria-label="Show password" aria-pressed="false"></i>
                             </div>
-
                             <div class="input-group password-group">
                                 <label for="regConfirm">Confirm Password</label>
-
-                                <input type="password" id="regConfirm" autocomplete="new-password" aria-describedby="error-regConfirm">
+                                <input type="password" id="regConfirm" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="error-regConfirm">
                                 <div class="form-error err" id="error-regConfirm" role="alert"></div>
-
-                                <i class="fa-solid fa-eye password-eye" role="button" tabindex="0" aria-label="Show password"></i>
+                                <i class="fa-solid fa-eye password-eye" role="button" tabindex="0" aria-label="Show password" aria-pressed="false"></i>
                             </div>
                         </div>
 
                         <div class="form-row">
-                            <div class="input-group campus-group">
-                                <label>Campus</label>
-                                <div class="campus-display">Daanbantayan Campus</div>
-                            </div>
-                            <div class="input-group password-group">
-                                <label for="regPassword">Password *</label>
-                                <input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
-                                <i class="fa-solid fa-eye password-eye"></i>
-                            </div>
-                            <div class="input-group password-group">
-                                <label for="regConfirmPassword">Confirm Password *</label>
-                                <input id="regConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
-                                <i class="fa-solid fa-eye password-eye"></i>
+                            <div class="input-group">
+                                <label for="campusDisplay">Campus</label>
+                                <div class="campus-display" id="campusDisplay">Daanbantayan Campus</div>
                             </div>
                         </div>
-                        <p class="form-subtitle">New accounts are registered for Daanbantayan Campus. Your enrollment week is assigned automatically from your year level.</p>
+                        <p class="form-subtitle">Your enrollment week is assigned automatically based on your year level.</p>
 
                         <p id="registerMessage" role="alert" aria-live="polite"></p>
 

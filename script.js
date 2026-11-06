@@ -296,7 +296,6 @@ PAGES.login = {
       <a href="#" id="forgotLink">Forgot password?</a><br><br>
       <button class="btn" style="width:100%">Login</button>
       <p class="center">No account yet? <a href="register.html">Register</a></p>
-      <p class="center admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin sign in</a></p>
     </form></div>`,
 
   setup() {
@@ -345,45 +344,111 @@ PAGES.register = {
     <div class="auth"><form class="card" id="registerForm" novalidate>
       <div class="logo center">Enroll<span>Ease</span></div>
       <h2 class="center">Create Account</h2>
-      ${inputField('regName', 'Full Name')}
-      ${inputField('regSid', 'Student ID', 'text', '', 'placeholder="2024-00000"')}
+      ${inputField('regFirstName', 'First Name')}
+      ${inputField('regMiddleName', 'Middle Name')}
+      ${inputField('regLastName', 'Last Name')}
+      ${inputField('regSid', 'Student ID', 'text', '', 'placeholder="8240000"')}
       ${inputField('regEmail', 'Email Address', 'email')}
-      ${inputField('regPassword', 'Password', 'password')}
-      ${inputField('regConfirm', 'Confirm Password', 'password')}
-      <button class="btn" style="width:100%">Create Account</button>
+      ${inputField('regContact', 'Phone Number', 'tel')}
+      <label for="regProgram">Course / Program</label>
+      <select id="regProgram">
+        <option value="">Select course / program</option>
+        <option>BS Information Technology</option>
+        <option>BS Computer Science</option>
+        <option>BS Information Systems</option>
+        <option>BS Hospitality Management</option>
+        <option>BS Industrial Technology</option>
+        <option>BS Education</option>
+      </select>
+      <div class="err" id="error-regProgram"></div>
+      <label for="regYear">Year Level</label>
+      <select id="regYear">
+        <option value="">Select year level</option>
+        <option>1st Year</option><option>2nd Year</option>
+        <option>3rd Year</option><option>4th Year</option>
+      </select>
+      <div class="err" id="error-regYear"></div>
+      ${inputField('regPassword', 'Password', 'password', '', 'minlength="8" maxlength="72"')}
+      ${inputField('regConfirm', 'Confirm Password', 'password', '', 'minlength="8" maxlength="72"')}
+      <p class="muted">Campus: Daanbantayan Campus</p>
+      <p id="registerMessage" role="alert" aria-live="polite"></p>
+      <button class="btn" id="registerSubmit" type="submit"><span>Create Account</span></button>
       <p class="center">Have an account? <a href="login.html">Login</a></p>
     </form></div>`,
 
   setup() {
-    select('#registerForm').onsubmit = event => {
+    const form = select('#registerForm');
+    const message = select('#registerMessage');
+    const submitButton = select('#registerSubmit');
+    form.onsubmit = async event => {
       event.preventDefault();
       clearErrors();
-      const name = select('#regName').value.trim();
-      const sid = select('#regSid').value.trim();
+      message.textContent = '';
+      message.classList.remove('success');
+      const firstName = select('#regFirstName').value.trim();
+      const middleName = select('#regMiddleName').value.trim();
+      const lastName = select('#regLastName').value.trim();
+      const studentId = select('#regSid').value.trim();
       const email = select('#regEmail').value.trim();
+      const phone = select('#regContact').value.trim();
+      const program = select('#regProgram').value;
+      const yearLevel = select('#regYear').value;
       const password = select('#regPassword').value;
-      const confirm = select('#regConfirm').value;
-      const users = allUsers();
+      const confirmPassword = select('#regConfirm').value;
 
       let valid = true;
-      if (name.length < 3) valid = showError('regName', 'Enter your full name.');
-      if (!/^[\w-]{5,}$/.test(sid)) valid = showError('regSid', 'Student ID needs at least 5 letters, numbers or dashes.');
-      else if (users.some(u => u.sid === sid)) valid = showError('regSid', 'This Student ID is already registered.');
+      if (!firstName) valid = showError('regFirstName', 'Enter your first name.');
+      if (!middleName) valid = showError('regMiddleName', 'Enter your middle name.');
+      if (!lastName) valid = showError('regLastName', 'Enter your last name.');
+      if (!/^824\d{4}$/.test(studentId)) valid = showError('regSid', 'Enter your 7-digit Daanbantayan Student ID beginning with 824.');
       if (!/^\S+@\S+\.\S+$/.test(email)) valid = showError('regEmail', 'Enter a valid email address.');
-      else if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) valid = showError('regEmail', 'This email is already registered.');
-      if (password.length < 8) valid = showError('regPassword', 'Password must be at least 8 characters.');
-      if (confirm !== password) valid = showError('regConfirm', 'Passwords do not match.');
+      if (!/^[\d\s()+-]{7,32}$/.test(phone)) valid = showError('regContact', 'Enter a valid phone number.');
+      if (!program) valid = showError('regProgram', 'Select your course or program.');
+      if (!yearLevel) valid = showError('regYear', 'Select your year level.');
+      if (password.length < 8 || password.length > 72) valid = showError('regPassword', 'Password must be 8 to 72 characters.');
+      if (confirmPassword !== password) valid = showError('regConfirm', 'Passwords do not match.');
       if (!valid) return;
 
-      users.push({
-        name, sid, email, password, contact: '',
-        program: 'BS Information Technology', year: '1st Year', section: 'BSIT 1-A', enrolled: todayString()
-      });
-      saveData('ee_users', users);
-      addDemoPastAppointments(sid);
-      flashMessage('Account created! Please log in.');
-      goTo('login');
+      submitButton.disabled = true;
+      submitButton.querySelector('span').textContent = 'Creating account…';
+      try {
+        const response = await fetch('api/student/register.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId, firstName, middleName, lastName, email, phone,
+            program, yearLevel, password, confirmPassword
+          })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          message.textContent = result.message || 'Account registration could not be completed.';
+          return;
+        }
+        message.textContent = result.message || 'Account created successfully. Redirecting to sign in…';
+        message.classList.add('success');
+        form.reset();
+        window.setTimeout(() => goTo('login'), 1500);
+      } catch (error) {
+        console.error('Student registration request failed.', error);
+        message.textContent = 'The registration service is unavailable. Please try again.';
+      } finally {
+        submitButton.disabled = false;
+        submitButton.querySelector('span').textContent = 'Create Account';
+      }
     };
+
+    document.querySelectorAll('.password-eye').forEach(toggle => {
+      const password = toggle.closest('.password-group')?.querySelector('input');
+      if (!password) return;
+      toggle.onclick = () => {
+        const visible = password.type === 'password';
+        password.type = visible ? 'text' : 'password';
+        toggle.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+        toggle.setAttribute('aria-pressed', String(visible));
+      };
+    });
   }
 };
 

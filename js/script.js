@@ -16,6 +16,12 @@
 /* ---------- 1. SETTINGS ---------- */
 const PAGES_WITHOUT_LOGIN = ['index', 'login', 'register'];
 const currentPage = document.body.dataset.page;
+const OFFICE_DETAILS = {
+  'Enrollment Appointment': {
+    window: 'Registrar / Enrollment Office',
+    docs: ['Completed Enrollment Form', 'Verified enrollment documents', 'Official CTU Student ID']
+  }
+};
 
 
 /* ---------- 2. SAVING AND LOADING DATA ---------- */
@@ -35,6 +41,7 @@ function clearStudentSession() {
   for (const storage of [localStorage, sessionStorage]) {
     storage.removeItem('ee_session');
     storage.removeItem('ee_csrf');
+    storage.removeItem('ee_profile');
   }
 }
 
@@ -74,7 +81,17 @@ if (Array.isArray(savedProfiles) && savedProfiles.some(user =>
 
 function allUsers()        { return loadData('ee_users', []); }
 function allAppointments() { return loadData('ee_appointments', []); }
-function currentUser()     { return allUsers().find(u => u.sid === sessionStorage.getItem('ee_session')); }
+function currentUser() {
+  const sessionId = sessionStorage.getItem('ee_session');
+  if (!sessionId) return null;
+  try {
+    const profile = JSON.parse(sessionStorage.getItem('ee_profile') || 'null');
+    if (profile && profile.sid === sessionId) return profile;
+  } catch (error) {
+    sessionStorage.removeItem('ee_profile');
+  }
+  return allUsers().find(user => user.sid === sessionId) || null;
+}
 function myAppointments()  {
   return allAppointments().filter(a => a.sid === sessionStorage.getItem('ee_session'));
 }
@@ -475,7 +492,7 @@ PAGES.login = {
       <div class="logo center">CTU Daanbantayan Campus</div>
       <h2 class="center">Welcome back</h2>
       <p class="muted center">Demo: 2024-00123 / demo1234</p>
-      ${inputField('loginId', 'Email, Student ID, or Admin Email')}
+      ${inputField('loginId', 'Email Address or Student ID')}
       ${inputField('loginPassword', 'Password', 'password')}
       <a href="#" id="forgotLink">Forgot password?</a><br><br>
       <button type="submit" class="btn" style="width:100%">Login</button>
@@ -494,37 +511,29 @@ PAGES.login = {
       if (!typedPassword) valid = showError('loginPassword', 'Enter your password.');
       if (!valid) return;
 
-      const admin = window.EnrolleAdminAuth?.authenticate(typedId, typedPassword);
-      if (admin) {
-        try {
-          localStorage.removeItem('ee_session');
-          localStorage.setItem('enrolle_admin_session', JSON.stringify({
-            ...admin,
-            signedInAt: Date.now()
-          }));
-        } catch (error) {
-          console.error('Unable to save the administrator sign-in session.', error);
-          return showError('loginId', 'Unable to save your sign-in. Check that browser storage is enabled and try again.');
-        }
-        window.location.assign('admin-dashboard.html');
-        return;
-      }
-
-      const user = allUsers().find(u =>
-        (typeof u.email === 'string' && u.email.toLowerCase() === typedId.toLowerCase()) ||
-        u.sid === typedId);
-      if (!user) return showError('loginId', 'Wrong email or student ID. Check it and try again.');
-      if (user.password !== typedPassword) return showError('loginPassword', 'Wrong password. Try again.');
-
       try {
-        saveData('ee_session', user.sid);
+        const response = await studentFetch('api/student/login.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginId: typedId, password: typedPassword })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success || !result.profile || !result.csrfToken) {
+          return showError('loginId', result.message || 'The sign-in service could not verify your account.');
+        }
+        sessionStorage.setItem('ee_session', result.profile.sid);
+        sessionStorage.setItem('ee_csrf', result.csrfToken);
+        sessionStorage.setItem('ee_profile', JSON.stringify(result.profile));
         localStorage.removeItem('enrolle_admin_session');
       } catch (error) {
-        console.error('Unable to save the student sign-in session.', error);
-        return showError('loginId', 'Unable to save your sign-in. Check that browser storage is enabled and try again.');
+        console.error('Unable to complete student sign-in.', error);
+        return showError('loginId', error instanceof TypeError
+          ? 'The sign-in service is unavailable. Please try again.'
+          : 'Unable to save your sign-in. Check that browser storage is enabled and try again.');
       }
-      addDemoPastAppointments(user.sid);
-      flashMessage('Welcome back, ' + user.name.split(' ')[0] + '!');
+      const user = currentUser();
+      flashMessage('Welcome back, ' + ((user && user.name) || 'Student').split(' ')[0] + '!');
       goTo('dashboard');
     };
 
@@ -601,53 +610,76 @@ PAGES.register = {
     </form></div>`,
 
   setup() {
-    select('#registerForm').onsubmit = event => {
+    const form = select('#registerForm');
+    const message = select('#registerMessage');
+    const submitButton = select('#registerSubmit');
+
+    form.onsubmit = async event => {
       event.preventDefault();
       clearErrors();
-      const name = select('#regName').value.trim();
-      const sid = select('#regSid').value.trim();
+      message.textContent = '';
+      message.classList.remove('success');
+
+      const firstName = select('#regFirstName').value.trim();
+      const middleName = select('#regMiddleName').value.trim();
+      const lastName = select('#regLastName').value.trim();
+      const studentId = select('#regSid').value.trim();
       const email = select('#regEmail').value.trim();
-      const contact = select('#regContact').value.trim();
+      const phone = select('#regContact').value.trim();
       const program = select('#regProgram').value;
-      const year = select('#regYear').value;
+      const yearLevel = select('#regYear').value;
       const password = select('#regPassword').value;
-      const confirm = select('#regConfirm').value;
-      const users = allUsers();
+      const confirmPassword = select('#regConfirm').value;
 
       let valid = true;
-      if (name.length < 3) valid = showError('regName', 'Enter your full name.');
-      if (!/^[\w-]{5,}$/.test(sid)) valid = showError('regSid', 'Enter a valid Student ID or LRN (at least 5 letters, numbers or dashes).');
-      else if (users.some(u => u.sid === sid)) valid = showError('regSid', 'This Student ID / LRN is already registered.');
+      if (!firstName) valid = showError('regFirstName', 'Enter your first name.');
+      if (!middleName) valid = showError('regMiddleName', 'Enter your middle name.');
+      if (!lastName) valid = showError('regLastName', 'Enter your last name.');
+      if (!/^824\d{4}$/.test(studentId)) valid = showError('regSid', 'Enter your 7-digit Daanbantayan Student ID beginning with 824.');
       if (!/^\S+@\S+\.\S+$/.test(email)) valid = showError('regEmail', 'Enter a valid email address.');
-      else if (users.some(u => typeof u.email === 'string' && u.email.toLowerCase() === email.toLowerCase())) valid = showError('regEmail', 'This email is already registered.');
-      if (!contact) valid = showError('regContact', 'Enter your phone number.');
+      if (!/^[\d\s()+-]{7,32}$/.test(phone)) valid = showError('regContact', 'Enter a valid phone number.');
       if (!program) valid = showError('regProgram', 'Select your course or program.');
-      if (!year) valid = showError('regYear', 'Select your year level.');
-      if (password.length < 8) valid = showError('regPassword', 'Password must be at least 8 characters.');
-      if (confirm !== password) valid = showError('regConfirm', 'Passwords do not match.');
+      if (!yearLevel) valid = showError('regYear', 'Select your year level.');
+      if (password.length < 8 || password.length > 72) valid = showError('regPassword', 'Password must be 8 to 72 characters.');
+      if (confirmPassword !== password) valid = showError('regConfirm', 'Passwords do not match.');
       if (!valid) return;
 
-      users.push({
-        name, sid, email, password, contact, program, year,
-        section: program.includes('Information Technology') ? `BSIT ${year.charAt(0)}-A` : 'Section 1-A',
-        enrolled: todayString(),
-        status: 'Regular / Officially Enrolled'
-      });
+      submitButton.disabled = true;
+      submitButton.querySelector('span').textContent = 'Creating account…';
       try {
-        saveData('ee_users', users);
+        const response = await studentFetch('api/student/register.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId,
+            firstName,
+            middleName,
+            lastName,
+            email,
+            phone,
+            program,
+            yearLevel,
+            password,
+            confirmPassword
+          })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          message.textContent = result.message || 'Account registration could not be completed.';
+          return;
+        }
+        message.textContent = result.message || 'Account created successfully. Redirecting to sign in…';
+        message.classList.add('success');
+        form.reset();
+        window.setTimeout(() => goTo('login'), 1500);
       } catch (error) {
-        console.error('Unable to save the new student account.', error);
-        return showError('regEmail', 'Unable to save your account. Check browser storage and try again.');
+        console.error('Student registration request failed.', error);
+        message.textContent = 'The registration service is unavailable. Please try again.';
+      } finally {
+        submitButton.disabled = false;
+        submitButton.querySelector('span').textContent = 'Create Account';
       }
-      try {
-        addDemoPastAppointments(sid);
-        saveData('ee_session', sid);
-      } catch (error) {
-        console.error('Unable to initialize the new student account.', error);
-        return showError('regEmail', 'Your account could not be fully initialized. Check browser storage and try again.');
-      }
-      flashMessage('Account created successfully!');
-      goTo('dashboard');
     };
 
     document.querySelectorAll('.password-eye').forEach(toggle => {
@@ -659,6 +691,7 @@ PAGES.register = {
         toggle.classList.toggle('fa-eye', !visible);
         toggle.classList.toggle('fa-eye-slash', visible);
         toggle.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+        toggle.setAttribute('aria-pressed', String(visible));
       };
       toggle.addEventListener('click', togglePassword);
       toggle.addEventListener('keydown', event => {
@@ -921,54 +954,23 @@ PAGES['book-appointment'] = {
         <select id="enrollmentSlot"><option value="">Select an available slot</option></select>
         <p class="muted">Slots are subject to availability until your booking is confirmed.</p>
         <div class="err" id="bookingError" role="alert"></div>
-        <button class="btn" id="confirmEnrollmentButton" disabled>Confirm Enrollment Appointment</button>
+        <button class="btn" id="reviewEnrollmentButton" disabled>Review Appointment</button>
       </div>
     </div>`),
 
   setup() {
-    const typeSelect = select('#type');
-    const locText = select('#officeLocationText');
-    const docList = select('#officeDocList');
+    const resultBox = select('#eligibilityResult');
+    const slotPicker = select('#slotPicker');
+    const slotSelect = select('#enrollmentSlot');
+    const reviewButton = select('#reviewEnrollmentButton');
+    const errorBox = select('#bookingError');
+    let slots = [];
+    let student = null;
+    let schedule = null;
 
-    function updateDocChecklist() {
-      const selectedType = typeSelect.value;
-      const details = OFFICE_DETAILS[selectedType];
-      if (details) {
-        locText.textContent = '📍 ' + details.window;
-        docList.innerHTML = details.docs.map(doc => `
-          <li class="doc-item">
-            <span class="doc-check-icon">✓</span>
-            <span>${escapeHtml(doc)}</span>
-          </li>
-        `).join('');
-      }
-    }
-
-    typeSelect.onchange = updateDocChecklist;
-    updateDocChecklist();
-
-    let chosenDate = null, chosenTime = null;
-    setupTimePicker(null, (date, time) => {
-      chosenDate = date;
-      chosenTime = time;
-      select('#continueButton').disabled = !time;
-    });
-
-    const dashboardDate = sessionStorage.getItem('ee_dashboard_booking_date');
-    if (dashboardDate) {
-      sessionStorage.removeItem('ee_dashboard_booking_date');
-      if (dashboardDate >= todayString()) {
-        select('#date').value = dashboardDate;
-        select('#date').dispatchEvent(new Event('change'));
-      }
-    }
-
-    select('#continueButton').onclick = () => {
-      if (!chosenDate || !chosenTime) return showError('book', 'Select a date and an available time.');
-      sessionStorage.setItem('ee_draft', JSON.stringify({
-        type: typeSelect.value, date: chosenDate, time: chosenTime
-      }));
-      goTo('appointment-summary');
+    const redirectToLogin = () => {
+      clearStudentSession();
+      goTo('login');
     };
 
     const renderEligibility = (eligibility, profile, schedule) => {
@@ -998,11 +1000,14 @@ PAGES['book-appointment'] = {
         renderEligibility(result.eligibility, result.student, result.schedule);
         return;
       }
-      renderEligibility({ eligible: true, checks: [] }, result.student, result.schedule);
-      slots = result.slots;
+      student = result.student;
+      schedule = result.schedule;
+      renderEligibility({ eligible: true, checks: [] }, student, schedule);
+      slots = Array.isArray(result.slots) ? result.slots : [];
       slotSelect.innerHTML = '<option value="">Select an available slot</option>' +
         slots.map((slot, index) => `<option value="${index}" ${slot.remaining === 0 ? 'disabled' : ''}>${escapeHtml(formatDate(slot.date))} · ${slot.dailyBooked}/${slot.dailyCapacity} students (${slot.dailyRemaining} daily slots left) · ${escapeHtml(slot.time)}${slot.remaining === 0 ? ' — FULL' : ''}</option>`).join('');
-      slotPicker.hidden = !result.schedule || slots.length === 0;
+      slotPicker.hidden = !schedule;
+      reviewButton.disabled = true;
       if (result.message) resultBox.insertAdjacentHTML('beforeend', `<p>${escapeHtml(result.message)}</p>`);
       else if (!slots.length) resultBox.insertAdjacentHTML('beforeend', '<p>No enrollment appointment time slots are configured for your assigned week.</p>');
       else if (slots.every(slot => slot.remaining === 0)) resultBox.insertAdjacentHTML('beforeend', '<p>All dates in your assigned enrollment week are FULL.</p>');
@@ -1022,12 +1027,121 @@ PAGES['book-appointment'] = {
       }
     };
 
-    slotSelect.onchange = () => { confirmButton.disabled = slotSelect.value === ''; };
-    confirmButton.onclick = async () => {
+    slotSelect.onchange = () => {
+      reviewButton.disabled = slotSelect.value === '';
+      errorBox.textContent = '';
+    };
+    reviewButton.onclick = () => {
       const slot = slots[Number(slotSelect.value)];
-      if (!slot) return;
+      if (!slot || slot.remaining < 1) return;
+      sessionStorage.setItem('ee_draft', JSON.stringify({
+        type: 'Enrollment Appointment',
+        date: slot.date,
+        time: slot.time,
+        student,
+        schedule
+      }));
+      goTo('appointment-summary');
+    };
+
+    loadEligibility();
+  }
+};
+
+/* 6. Appointment summary */
+PAGES['appointment-summary'] = {
+  render() {
+    let draft;
+    try {
+      draft = JSON.parse(sessionStorage.getItem('ee_draft') || 'null');
+    } catch (error) {
+      sessionStorage.removeItem('ee_draft');
+      goTo('book-appointment');
+      return '';
+    }
+    if (!draft || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date || '') || !/^\d{2}:\d{2}$/.test(draft.time || '')) {
+      sessionStorage.removeItem('ee_draft');
+      goTo('book-appointment');
+      return '';
+    }
+
+    const student = draft.student || currentUser() || {};
+    const schedule = draft.schedule || {};
+    const appointmentTime = new Date(`1970-01-01T${draft.time}:00`).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+
+    return withSidebar(`
+      <section class="appointment-summary-page">
+        <header class="appointment-summary-heading">
+          <div>
+            <p class="appointment-eyebrow">Review before confirming</p>
+            <h1>Appointment Summary</h1>
+            <p class="muted">Check your enrollment appointment details before you book.</p>
+          </div>
+          <div class="appointment-student-id">
+            <span>Student ID</span>
+            <strong>${escapeHtml(student.sid || '—')}</strong>
+          </div>
+        </header>
+
+        <section class="card appointment-summary-card" aria-labelledby="summaryTitle">
+          <div class="appointment-summary-title">
+            <div class="appointment-calendar-icon" aria-hidden="true">▦</div>
+            <div>
+              <p class="appointment-eyebrow">Enrollment appointment</p>
+              <h2 id="summaryTitle">Your selected schedule</h2>
+              <p class="muted">${escapeHtml(student.assignedEnrollmentWeek || 'Assigned enrollment week')}</p>
+            </div>
+          </div>
+
+          <div class="appointment-details">
+            ${detailsList({
+              'Student Name': student.name || 'Enrolled Student',
+              'Course / Program': student.program || '—',
+              'Year Level': student.yearLevel || student.year || '—',
+              'Appointment Date': formatDate(draft.date),
+              'Scheduled Time': appointmentTime,
+              'Enrollment Week': schedule.start_date && schedule.end_date
+                ? `${formatDate(schedule.start_date)} – ${formatDate(schedule.end_date)}`
+                : student.assignedEnrollmentWeek || 'Not available'
+            })}
+          </div>
+
+          <aside class="appointment-reminder">
+            <span aria-hidden="true">i</span>
+            <p><strong>Before you arrive</strong><br>
+            Arrive 15 minutes before your schedule and bring your verified enrollment documents and official CTU Student ID. The appointment is not booked until you confirm.
+            </p>
+          </aside>
+
+          <div class="appointment-summary-error err" id="summaryError" role="alert" aria-live="polite"></div>
+          <div class="appointment-summary-actions">
+            <button class="btn alt" id="backButton" type="button">Choose another slot</button>
+            <button class="btn" id="confirmButton" type="button">Confirm Appointment</button>
+          </div>
+        </section>
+      </section>`);
+  },
+
+  setup() {
+    let draft;
+    try {
+      draft = JSON.parse(sessionStorage.getItem('ee_draft') || 'null');
+    } catch (error) {
+      sessionStorage.removeItem('ee_draft');
+      goTo('book-appointment');
+      return;
+    }
+    if (!draft) return;
+    select('#backButton').onclick = () => goTo('book-appointment');
+
+    const confirmButton = select('#confirmButton');
+    const errorBox = select('#summaryError');
+    confirmButton.onclick = async () => {
       confirmButton.disabled = true;
-      select('#bookingError').textContent = '';
+      errorBox.textContent = '';
       try {
         const response = await studentFetch('api/student/book.php', {
           method: 'POST',
@@ -1036,24 +1150,28 @@ PAGES['book-appointment'] = {
             'Content-Type': 'application/json',
             'X-CSRF-Token': sessionStorage.getItem('ee_csrf') || ''
           },
-          body: JSON.stringify({ date: slot.date, time: slot.time })
+          body: JSON.stringify({ date: draft.date, time: draft.time })
         });
-        if (response.status === 401) return redirectToLogin();
+        if (response.status === 401) {
+          clearStudentSession();
+          goTo('login');
+          return;
+        }
         const result = await response.json();
         if (!response.ok || !result.success) {
-          if (result.eligibility) renderEligibility(result.eligibility);
           if (response.status === 409) {
-            await loadSlots();
-            slotSelect.value = '';
-            confirmButton.disabled = true;
+            sessionStorage.removeItem('ee_draft');
+            flashMessage(result.message || 'That appointment slot is no longer available. Please choose another.');
+            goTo('book-appointment');
+            return;
           }
           throw new Error(result.message || 'The appointment could not be booked.');
         }
-        const user = currentUser();
+        const student = draft.student || currentUser() || {};
         const appointment = {
           id: result.appointment.referenceNumber,
           referenceNumber: result.appointment.referenceNumber,
-          sid: user.sid,
+          sid: student.sid || '',
           type: 'Enrollment Appointment',
           date: result.appointment.date,
           time: result.appointment.time,
@@ -1061,120 +1179,31 @@ PAGES['book-appointment'] = {
           status: result.appointment.status,
           emailSent: result.appointment.emailSent
         };
-        saveData('ee_appointments', allAppointments().concat(appointment));
-        saveData('ee_last', appointment.id);
+        try {
+          saveData('ee_appointments', allAppointments().concat(appointment));
+          saveData('ee_last', appointment.id);
+        } catch (error) {
+          console.error('Unable to cache the confirmed appointment.', error);
+        }
+        sessionStorage.setItem('ee_last_appointment', JSON.stringify(appointment));
         sessionStorage.removeItem('ee_draft');
         goTo('confirmation');
       } catch (error) {
-        select('#bookingError').textContent = error.message || 'The appointment could not be booked.';
-        confirmButton.disabled = slotSelect.value === '';
+        errorBox.textContent = error.message || 'The appointment could not be booked. Please try again.';
+        confirmButton.disabled = false;
       }
-    };
-    loadEligibility();
-  }
-};
-
-/* 6. Appointment summary */
-PAGES['appointment-summary'] = {
-  render() {
-    const draft = JSON.parse(sessionStorage.getItem('ee_draft') || 'null');
-    if (!draft) { goTo('book-appointment'); return ''; }
-
-    const user = currentUser();
-    const details = OFFICE_DETAILS[draft.type] || {};
-    const qNum = nextQueueNumber(draft.date, draft.type);
-
-    return withSidebar(`
-      <h1>Appointment Summary</h1>
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--ln);padding-bottom:14px;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-          <div>
-            <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--b2)">Campus Office Visit</span>
-            <h3 style="margin:4px 0 0;font-size:18px">${escapeHtml(draft.type)}</h3>
-            <div class="muted" style="font-size:13px;margin-top:2px">📍 ${escapeHtml(details.window || 'Administration Building')}</div>
-          </div>
-          <div style="text-align:right">
-            <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">Estimated Queue #</span>
-            <div style="font-size:26px;font-weight:800;color:var(--b2);letter-spacing:1px">${qNum}</div>
-          </div>
-        </div>
-
-        ${detailsList({
-          'Student Name': user ? user.name : 'Enrolled Student',
-          'Student ID': user ? user.sid : '2024-00123',
-          'Section': user ? (user.section || 'BSIT 2-A') : 'BSIT 2-A',
-          'Course / Program': draft.program || (user ? user.program : '—'),
-          'Year Level': draft.yearLevel || (user ? user.year : '—'),
-          'Term': draft.term || '—',
-          'Appointment Date': formatDate(draft.date),
-          'Scheduled Time': draft.time,
-          'Time Period': draft.period || '—',
-          'Designated Window': details.window || 'Administration Building'
-        })}
-
-        <h3 class="sec" style="font-size:15px;margin-top:20px;display:flex;align-items:center;gap:6px">
-          📋 <span>Required Documents to Present</span>
-        </h3>
-        <ul style="margin:8px 0 16px;padding-left:20px;line-height:1.7;color:var(--tx);font-size:14px">
-          ${(details.docs || ['Valid CTU Student ID Card', 'Pre-Enrollment Advising Slip']).map(d => `<li><b>${escapeHtml(d)}</b></li>`).join('')}
-        </ul>
-
-        <div style="background:rgba(59,130,246,0.06);border:1px solid var(--ln);border-radius:8px;padding:12px 14px;margin-bottom:20px">
-          <b style="font-size:13px;color:var(--b)">Important Reminder:</b>
-          <p style="margin:4px 0 0;font-size:12.5px;color:var(--mu);line-height:1.5">
-            Arrive at the designated office window 15 minutes before your schedule. Bring your physical documents and official CTU Student ID. Your digital queue ticket will be scanned upon arrival.
-          </p>
-        </div>
-
-        <div class="row">
-          <button class="btn alt" id="backButton">Back</button>
-          <button class="btn" id="confirmButton">Confirm Appointment</button>
-        </div>
-      </div>`);
-  },
-
-  setup() {
-    const draft = JSON.parse(sessionStorage.getItem('ee_draft'));
-    if (!draft) return;
-    select('#backButton').onclick = () => goTo('book-appointment');
-
-    select('#confirmButton').onclick = () => {
-      // Check again in case the slot was taken meanwhile.
-      if (isSlotUnavailable(draft.date, draft.time)) {
-        showToast('That slot was just taken. Choose another.', true);
-        return setTimeout(() => goTo('book-appointment'), 1200);
-      }
-      const qNum = nextQueueNumber(draft.date, draft.type);
-      const appointment = {
-        id: 'a' + Date.now(),
-        sid: loadData('ee_session'),
-        type: draft.type,
-        date: draft.date,
-        time: draft.time,
-        period: draft.period,
-        program: draft.program,
-        yearLevel: draft.yearLevel,
-        term: draft.term,
-        queue: qNum,
-        status: 'Confirmed'
-      };
-      saveData('ee_appointments', allAppointments().concat(appointment));
-      saveData('ee_last', appointment.id);
-
-      // Two-way sync to Admin Dashboard (enrolle_admin_appointments & enrolle_admin_students)
-      const user = currentUser();
-      if (user) {
-        syncToAdminDashboard(appointment, user);
-      }
-
-      sessionStorage.removeItem('ee_draft');
-      goTo('confirmation');
     };
   }
 };
 
 // The most recently booked/rescheduled appointment.
 function lastAppointment() {
+  try {
+    const recent = JSON.parse(sessionStorage.getItem('ee_last_appointment') || 'null');
+    if (recent) return recent;
+  } catch (error) {
+    sessionStorage.removeItem('ee_last_appointment');
+  }
   return allAppointments().find(a => a.id === loadData('ee_last'));
 }
 
@@ -1779,53 +1808,52 @@ PAGES.settings = {
 
 
 /* ---------- 8. START THE APP ---------- */
-const needsLogin = !PAGES_WITHOUT_LOGIN.includes(currentPage);
+function startApplication() {
+  const loggedIn = Boolean(currentUser());
+  const needsLogin = !PAGES_WITHOUT_LOGIN.includes(currentPage);
 
-if (needsLogin && !loggedIn) {
-  flashMessage('Please log in to continue.');
-  goTo('login');
-} else if (loggedIn && currentPage === 'register') {
-  goTo('dashboard');
-} else {
-  const page = PAGES[currentPage];
-  if (!page) return;
-  const usesStaticLoginShell = currentPage === 'login' && Boolean(select('#loginForm'));
-  const usesStaticRegisterShell = currentPage === 'register' && Boolean(select('#registerForm'));
-  const usesStaticDashboard = currentPage === 'dashboard' && Boolean(select('.app-shell'));
-  const usesExistingMarkup = usesStaticLoginShell || usesStaticRegisterShell || usesStaticDashboard;
-  const html = usesExistingMarkup ? '' : page.render(); // returns '' when it redirects away
-  if (!usesExistingMarkup) {
-    select('#app').innerHTML = html;
-  }
-  if (usesStaticDashboard) {
-    page.setup();
-  } else if (usesStaticRegisterShell) {
-    page.setup();
-  } else if (usesStaticLoginShell) {
-    page.setup();
-    const passwordInput = select('#loginPassword');
-    const passwordToggle = select('#togglePassword');
-    if (passwordInput && passwordToggle) {
-      passwordToggle.onclick = () => {
-        const showingPassword = passwordInput.type === 'text';
-        passwordInput.type = showingPassword ? 'password' : 'text';
-        passwordToggle.classList.toggle('fa-eye', showingPassword);
-        passwordToggle.classList.toggle('fa-eye-slash', !showingPassword);
-      };
+  if (needsLogin && !loggedIn) {
+    flashMessage('Please log in to continue.');
+    goTo('login');
+  } else if (loggedIn && currentPage === 'register') {
+    goTo('dashboard');
+  } else {
+    const page = PAGES[currentPage];
+    if (!page) return;
+    const usesStaticLoginShell = currentPage === 'login' && Boolean(select('#loginForm'));
+    const usesStaticRegisterShell = currentPage === 'register' && Boolean(select('#registerForm'));
+    const usesStaticDashboard = currentPage === 'dashboard' && Boolean(select('.app-shell'));
+    const usesExistingMarkup = usesStaticLoginShell || usesStaticRegisterShell || usesStaticDashboard;
+    const html = usesExistingMarkup ? '' : page.render();
+    if (!usesExistingMarkup) {
+      select('#app').innerHTML = html;
     }
-  } else if (html && page.setup) {
-    page.setup();
-  }
+    if (usesStaticDashboard || usesStaticRegisterShell) {
+      page.setup();
+    } else if (usesStaticLoginShell) {
+      page.setup();
+      const passwordInput = select('#loginPassword');
+      const passwordToggle = select('#togglePassword');
+      if (passwordInput && passwordToggle) {
+        passwordToggle.onclick = () => {
+          const showingPassword = passwordInput.type === 'text';
+          passwordInput.type = showingPassword ? 'password' : 'text';
+          passwordToggle.classList.toggle('fa-eye', showingPassword);
+          passwordToggle.classList.toggle('fa-eye-slash', !showingPassword);
+        };
+      }
+    } else if (html && page.setup) {
+      page.setup();
+    }
 
-  // Sidebar buttons (only exist on logged-in pages)
-  const menuButton = select('#menuButton');
-  if (menuButton) menuButton.onclick = () => select('#sidebar').classList.toggle('open');
-  // Show a message left by the previous page
-  const message = sessionStorage.getItem('ee_flash');
-  if (message) {
-    sessionStorage.removeItem('ee_flash');
-    showToast(message);
+    const menuButton = select('#menuButton');
+    if (menuButton) menuButton.onclick = () => select('#sidebar').classList.toggle('open');
+    const message = sessionStorage.getItem('ee_flash');
+    if (message) {
+      sessionStorage.removeItem('ee_flash');
+      showToast(message);
+    }
   }
-};
+}
 
 startApplication();
