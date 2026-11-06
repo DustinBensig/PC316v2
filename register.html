@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EnrollEase - Register</title>
+    <title>CTU Daanbantayan Campus Enrollment System | Register</title>
 
     <link rel="stylesheet" href="register.css">
 
@@ -30,7 +30,7 @@
                         <i class="fa-solid fa-graduation-cap"></i>
                     </div>
 
-                    <span>EnrollEase</span>
+                    <span>CTU Daanbantayan Campus Enrollment System</span>
                 </div>
 
                 <div class="create-account">
@@ -38,8 +38,8 @@
                 </div>
 
                 <h1>
-                    Join the Smarter<br>
-                    Enrollment System
+                Cebu Technological University<br>
+                Daanbantayan Campus
                 </h1>
            
                 <div class="feature">
@@ -115,7 +115,6 @@
                                 <input type="text" id="regName" autocomplete="name" aria-describedby="error-regName">
                                 <div class="form-error err" id="error-regName" role="alert"></div>
                             </div>
-
                             <div class="input-group">
                                 <label for="regSid">Student ID / LRN</label>
 
@@ -194,12 +193,30 @@
 
                                 <i class="fa-solid fa-eye password-eye" role="button" tabindex="0" aria-label="Show password"></i>
                             </div>
-
                         </div>
 
+                        <div class="form-row">
+                            <div class="input-group campus-group">
+                                <label>Campus</label>
+                                <div class="campus-display">Daanbantayan Campus</div>
+                            </div>
+                            <div class="input-group password-group">
+                                <label for="regPassword">Password *</label>
+                                <input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+                                <i class="fa-solid fa-eye password-eye"></i>
+                            </div>
+                            <div class="input-group password-group">
+                                <label for="regConfirmPassword">Confirm Password *</label>
+                                <input id="regConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+                                <i class="fa-solid fa-eye password-eye"></i>
+                            </div>
+                        </div>
+                        <p class="form-subtitle">New accounts are registered for Daanbantayan Campus. Your enrollment week is assigned automatically from your year level.</p>
+
+                        <p id="registerMessage" role="alert" aria-live="polite"></p>
 
                         <!-- Submit -->
-                        <button type="submit" class="create-button">
+                        <button type="submit" class="create-button" id="registerSubmit">
 
                             <span>Create Account</span>
 

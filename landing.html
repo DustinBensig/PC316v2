@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EnrollEase | Centralized Student Enrollment System</title>
+    <title>CTU Daanbantayan Campus Enrollment System</title>
     <link rel="stylesheet" href="landing.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
                     <path d="M13 23.5v9.2C18 39 24.5 43 32 43s14-4 19-10.3v-9.2L32 35 13 23.5Z" fill="currentColor"/>
                     <path d="M60 17h3v13h-3z" fill="currentColor"/>
                 </svg>
-                <span>EnrollEase</span>
+                <span>CTU Daanbantayan Campus</span>
             </a>
 
             <nav class="nav-links" aria-label="Main navigation">
@@ -28,16 +28,17 @@
             <div class="nav-actions">
                 <a class="button button-login" href="login.html" data-entry-page="login.html">Login</a>
                 <a class="button button-register" href="register.html" data-entry-page="register.html">Register</a>
+                <a class="button button-login" href="admin-login/admin-login.html">Admin Login</a>
             </div>
         </header>
 
         <section class="hero" id="home">
             <div class="hero-copy">
-                <p class="eyebrow">CENTRALIZED STUDENT ENROLLMENT SYSTEM</p>
+                <p class="eyebrow">CTU DAANBANTAYAN CAMPUS ENROLLMENT SYSTEM</p>
                 <h1>Enroll Smarter .<br>Save Time.</h1>
                 <p class="description">
                     Skip the long lines and stressful queues,<br class="desktop-break">
-                    EnrollEase makes your enrollment process<br class="desktop-break">
+                    the campus enrollment system makes your process<br class="desktop-break">
                     faster, easier, and more organized. All in one place
                 </p>
                 <div class="hero-buttons">
@@ -56,8 +57,8 @@
                         </svg>
                     </div>
                     <div class="date-copy">
-                        <p>Next Enrollent Date</p>
-                        <h2>August 27, 2026</h2>
+                        <p>Next Enrollment Date</p>
+                        <h2 id="next-enrollment-date" aria-live="polite">Schedule not announced</h2>
                     </div>
                 </div>
 
@@ -104,8 +105,8 @@
                     <path d="M20 36h4M31 36h4M42 36h4M20 45h4M31 45h4"/>
                 </svg>
             </div>
-            <h3>Choose a<br>Schedule</h3>
-            <p>View available enrollment appointments and select a convenient time.</p>
+            <h3>Book an Enrollment<br>Appointment</h3>
+            <p>Check your eligibility, then choose an available enrollment time.</p>
             <a href="#features" class="arrow-btn" aria-label="Explore features">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -170,7 +171,7 @@
                     <path d="m22 40 6 6 13-13"/>
                 </svg>
             </div>
-            <h3>Appointment Booking</h3>
+            <h3>Enrollment Appointment</h3>
             <p>Choose from available enrollment schedules that suit your availability.</p>
         </article>
 
@@ -285,29 +286,12 @@
             </div>
         </div>
 
-        <form class="contact-form" id="contact-form">
-
-            <label for="contact-name">Name</label>
-            <input id="contact-name" name="name" type="text"
-                   placeholder="Enter your name" required>
-
-            <label for="contact-email">Email Address</label>
-            <input id="contact-email" name="email" type="email"
-                   placeholder="Enter your email" required>
-
-            <label for="contact-message">Message</label>
-            <textarea id="contact-message" name="message" rows="4"
-                      placeholder="Write your message..." required></textarea>
-
-            <button type="submit" class="contact-button">
-                Send Message
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 12h15M12 5l7 7-7 7"/>
-                </svg>
-            </button>
-
-            <p id="contact-note" class="form-note" aria-live="polite"></p>
-        </form>
+        <div class="contact-form">
+            <h3>Need help?</h3>
+            <p class="contact-description">
+                For enrollment assistance, contact the Registrar's Office through your campus student services desk.
+            </p>
+        </div>
 
     </div>
 </section>

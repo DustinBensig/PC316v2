@@ -3,10 +3,10 @@
 -- Enforce role, department, and record-level authorization in the PHP API;
 -- frontend filtering is for presentation only and is not a security boundary.
 
-CREATE DATABASE IF NOT EXISTS enrolle_enrollment
+CREATE DATABASE IF NOT EXISTS enrollment_system
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
-USE enrolle_enrollment;
+USE enrollment_system;
 
 CREATE TABLE roles (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -31,8 +31,19 @@ CREATE TABLE departments (
   UNIQUE KEY uq_departments_name (department_name)
 ) ENGINE=InnoDB;
 
+CREATE TABLE campuses (
+  campus_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  campus_name VARCHAR(120) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (campus_id),
+  UNIQUE KEY uq_campuses_name (campus_name)
+) ENGINE=InnoDB;
+
+INSERT INTO campuses (campus_name) VALUES ('Daanbantayan Campus');
+
 CREATE TABLE users (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username VARCHAR(64) NULL,
   email VARCHAR(190) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   first_name VARCHAR(100) NOT NULL,
@@ -45,6 +56,7 @@ CREATE TABLE users (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_users_username (username),
   UNIQUE KEY uq_users_email (email),
   KEY ix_users_type_active (account_type, is_active)
 ) ENGINE=InnoDB;
@@ -52,19 +64,204 @@ CREATE TABLE users (
 CREATE TABLE students (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
-  student_number VARCHAR(40) NOT NULL,
+  student_number VARCHAR(7) NULL,
+  middle_name VARCHAR(100) NULL,
   program VARCHAR(150) NOT NULL,
   year_level VARCHAR(40) NULL,
+  campus_id BIGINT UNSIGNED NOT NULL DEFAULT 1,
+  student_status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
   department_id BIGINT UNSIGNED NOT NULL,
-  academic_status ENUM('applicant', 'enrolling', 'enrolled', 'inactive') NOT NULL DEFAULT 'applicant',
+  academic_status ENUM('applicant', 'active', 'inactive', 'graduated', 'dropped', 'suspended', 'enrolling', 'enrolled') NOT NULL DEFAULT 'applicant',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_students_user (user_id),
   UNIQUE KEY uq_students_number (student_number),
   KEY ix_students_department_status (department_id, academic_status),
+  KEY ix_students_campus_status (campus_id, student_status),
+  CONSTRAINT chk_students_number_format CHECK (student_number IS NULL OR student_number REGEXP '^824[0-9]{4}$'),
   CONSTRAINT fk_students_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT fk_students_department FOREIGN KEY (department_id) REFERENCES departments (id)
+  CONSTRAINT fk_students_department FOREIGN KEY (department_id) REFERENCES departments (id),
+  CONSTRAINT fk_students_campus FOREIGN KEY (campus_id) REFERENCES campuses (campus_id),
+  CONSTRAINT chk_students_year_level CHECK (
+    year_level IS NULL OR LOWER(TRIM(year_level)) IN (
+      '1st year', '2nd year', '3rd year', '4th year',
+      'first year', 'second year', 'third year', 'fourth year',
+      'first', 'second', 'third', 'fourth'
+    )
+  )
+) ENGINE=InnoDB;
+
+ALTER TABLE students AUTO_INCREMENT = 8240000;
+
+DELIMITER //
+CREATE TRIGGER trg_students_daanbantayan_insert
+BEFORE INSERT ON students
+FOR EACH ROW
+BEGIN
+  DECLARE selected_campus VARCHAR(120);
+  SELECT campus_name INTO selected_campus
+  FROM campuses WHERE campus_id = NEW.campus_id;
+  IF selected_campus IS NULL OR selected_campus <> 'Daanbantayan Campus' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Students may only be registered at Daanbantayan Campus.';
+  END IF;
+END//
+
+CREATE TRIGGER trg_students_daanbantayan_update
+BEFORE UPDATE ON students
+FOR EACH ROW
+BEGIN
+  DECLARE selected_campus VARCHAR(120);
+  SELECT campus_name INTO selected_campus
+  FROM campuses WHERE campus_id = NEW.campus_id;
+  IF selected_campus IS NULL OR selected_campus <> 'Daanbantayan Campus' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Students may only be assigned to Daanbantayan Campus.';
+  END IF;
+END//
+DELIMITER ;
+
+CREATE TABLE grades (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  subject VARCHAR(150) NOT NULL,
+  grade DECIMAL(5,2) NULL,
+  grade_status ENUM('complete', 'missing', 'incomplete', 'deficient', 'failed', 'pending') NOT NULL DEFAULT 'pending',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY ix_grades_student_status (student_id, grade_status),
+  CONSTRAINT fk_grades_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE student_enrollment_subjects (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  subject VARCHAR(150) NOT NULL,
+  is_required TINYINT(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_student_enrollment_subject (student_id, subject),
+  CONSTRAINT fk_student_enrollment_subjects_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE financial_records (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  payment_status ENUM('paid', 'unpaid', 'pending') NOT NULL DEFAULT 'pending',
+  description VARCHAR(255) NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY ix_financial_student_status (student_id, payment_status),
+  CONSTRAINT fk_financial_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE enrollment_holds (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  status ENUM('active', 'released') NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY ix_enrollment_holds_student_status (student_id, status),
+  CONSTRAINT fk_enrollment_holds_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE enrollment_document_types (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  document_name VARCHAR(180) NOT NULL,
+  is_required TINYINT(1) NOT NULL DEFAULT 1,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_enrollment_document_name (document_name)
+) ENGINE=InnoDB;
+
+CREATE TABLE student_enrollment_documents (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  document_type_id BIGINT UNSIGNED NOT NULL,
+  status ENUM('missing', 'submitted', 'verified', 'rejected') NOT NULL DEFAULT 'missing',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_student_enrollment_document (student_id, document_type_id),
+  CONSTRAINT fk_student_enrollment_documents_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE,
+  CONSTRAINT fk_student_enrollment_documents_type FOREIGN KEY (document_type_id) REFERENCES enrollment_document_types (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE student_enrollment_requirements (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  requirement_name VARCHAR(180) NOT NULL,
+  status ENUM('unresolved', 'in_progress', 'resolved') NOT NULL DEFAULT 'unresolved',
+  blocks_enrollment TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY ix_student_enrollment_requirements (student_id, blocks_enrollment, status),
+  CONSTRAINT fk_student_enrollment_requirements_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE enrollment_eligibility_rules (
+  rule_key VARCHAR(60) NOT NULL,
+  rule_name VARCHAR(180) NOT NULL,
+  is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  rule_value JSON NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (rule_key)
+) ENGINE=InnoDB;
+
+CREATE TABLE enrollment_appointment_slots (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  slot_date DATE NOT NULL,
+  slot_time TIME NOT NULL,
+  capacity SMALLINT UNSIGNED NOT NULL DEFAULT 150,
+  is_open TINYINT(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_enrollment_slot_date_time (slot_date, slot_time),
+  KEY ix_enrollment_slots_available (is_open, slot_date, slot_time),
+  CONSTRAINT chk_enrollment_slot_capacity CHECK (capacity BETWEEN 1 AND 150)
+) ENGINE=InnoDB;
+
+CREATE TABLE enrollment_schedules (
+  schedule_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  year_level ENUM('First Year', 'Second Year', 'Third Year', 'Fourth Year') NOT NULL,
+  week_number TINYINT UNSIGNED NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (schedule_id),
+  UNIQUE KEY uq_enrollment_schedule_year_week (year_level, week_number),
+  KEY ix_enrollment_schedule_dates (status, start_date, end_date),
+  CONSTRAINT chk_enrollment_schedule_week CHECK (
+    (year_level = 'First Year' AND week_number = 1) OR
+    (year_level = 'Second Year' AND week_number = 2) OR
+    (year_level = 'Third Year' AND week_number = 3) OR
+    (year_level = 'Fourth Year' AND week_number = 4)
+  ),
+  CONSTRAINT chk_enrollment_schedule_dates CHECK (start_date <= end_date)
+) ENGINE=InnoDB;
+
+CREATE TABLE enrollment_daily_capacity (
+  appointment_date DATE NOT NULL,
+  daily_capacity SMALLINT UNSIGNED NOT NULL DEFAULT 150,
+  is_open TINYINT(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (appointment_date),
+  CONSTRAINT chk_enrollment_daily_capacity CHECK (daily_capacity = 150)
+) ENGINE=InnoDB;
+
+CREATE TABLE enrollment_schedule_days (
+  schedule_day_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  schedule_id BIGINT UNSIGNED NOT NULL,
+  appointment_date DATE NOT NULL,
+  is_open TINYINT(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (schedule_day_id),
+  UNIQUE KEY uq_enrollment_schedule_day (schedule_id, appointment_date),
+  KEY ix_enrollment_schedule_day_date (appointment_date, is_open),
+  CONSTRAINT fk_enrollment_schedule_day_schedule FOREIGN KEY (schedule_id)
+    REFERENCES enrollment_schedules (schedule_id) ON DELETE CASCADE,
+  CONSTRAINT fk_enrollment_schedule_day_capacity FOREIGN KEY (appointment_date)
+    REFERENCES enrollment_daily_capacity (appointment_date)
 ) ENGINE=InnoDB;
 
 CREATE TABLE role_permissions (
@@ -120,10 +317,11 @@ CREATE TABLE appointment_status (
 CREATE TABLE appointments (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   public_id CHAR(36) NOT NULL,
+  reference_number VARCHAR(40) NULL,
   student_id BIGINT UNSIGNED NOT NULL,
   department_id BIGINT UNSIGNED NOT NULL,
   appointment_status_id SMALLINT UNSIGNED NOT NULL,
-  appointment_type VARCHAR(100) NOT NULL,
+  appointment_type ENUM('Enrollment Appointment') NOT NULL DEFAULT 'Enrollment Appointment',
   scheduled_at DATETIME NOT NULL,
   student_note TEXT NULL,
   admin_note TEXT NULL,
@@ -133,6 +331,8 @@ CREATE TABLE appointments (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_appointments_public_id (public_id),
+  UNIQUE KEY uq_appointments_reference_number (reference_number),
+  KEY ix_appointments_type_schedule (appointment_type, scheduled_at),
   KEY ix_appointments_department_schedule (department_id, scheduled_at),
   KEY ix_appointments_student_schedule (student_id, scheduled_at),
   KEY ix_appointments_status_schedule (appointment_status_id, scheduled_at),
@@ -256,6 +456,18 @@ CREATE TABLE notifications (
   CONSTRAINT fk_notifications_appointment FOREIGN KEY (appointment_id) REFERENCES appointments (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE auth_rate_limits (
+  scope VARCHAR(40) NOT NULL,
+  subject_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  window_started_at DATETIME NOT NULL,
+  locked_until DATETIME NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (scope, subject_hash),
+  KEY ix_auth_rate_limits_locked_until (locked_until),
+  KEY ix_auth_rate_limits_window_started (window_started_at)
+) ENGINE=InnoDB;
+
 CREATE TABLE announcements (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   department_id BIGINT UNSIGNED NULL,
@@ -294,7 +506,23 @@ CREATE TABLE activity_logs (
   CONSTRAINT fk_activity_department FOREIGN KEY (department_id) REFERENCES departments (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE admin_audit_logs (
+  log_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  admin_id BIGINT UNSIGNED NULL,
+  student_id BIGINT UNSIGNED NULL,
+  action VARCHAR(40) NOT NULL,
+  old_data JSON NULL,
+  new_data JSON NULL,
+  date_created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (log_id),
+  KEY ix_admin_audit_student_date (student_id, date_created),
+  KEY ix_admin_audit_admin_date (admin_id, date_created),
+  CONSTRAINT fk_admin_audit_admin FOREIGN KEY (admin_id) REFERENCES admins (id) ON DELETE SET NULL,
+  CONSTRAINT fk_admin_audit_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 INSERT INTO roles (role_key, role_name, description) VALUES
+  ('SHARED_ADMIN', 'System Administrator', 'Single shared administrator account with full system access'),
   ('MIS', 'Main Admin', 'Full system access and cross-department administration'),
   ('SSG_ADMIN', 'SSG Admin', 'SSG appointments, assigned student information, and announcements'),
   ('CODETECH_ADMIN', 'CodeTech Admin', 'CodeTech appointments, students, and document verification'),
@@ -321,15 +549,73 @@ INSERT INTO appointment_status (status_code, status_name, is_terminal, sort_orde
   ('submitted', 'Submitted', 0, 1),
   ('pending', 'Pending', 0, 2),
   ('approved', 'Approved', 0, 3),
-  ('rescheduled', 'Rescheduled', 0, 4),
-  ('rejected', 'Rejected', 1, 5),
-  ('completed', 'Completed', 1, 6),
-  ('cancelled', 'Cancelled', 1, 7);
+  ('confirmed', 'Confirmed', 0, 4),
+  ('rescheduled', 'Rescheduled', 0, 5),
+  ('rejected', 'Rejected', 1, 6),
+  ('completed', 'Completed', 1, 7),
+  ('cancelled', 'Cancelled', 1, 8);
+
+INSERT INTO enrollment_eligibility_rules (rule_key, rule_name, is_enabled, rule_value) VALUES
+  ('grades', 'All grades completed and no academic deficiencies', 1, NULL),
+  ('financial', 'No outstanding financial obligation', 1, NULL),
+  ('holds', 'No active enrollment hold', 1, NULL),
+  ('documents', 'All required enrollment documents verified', 1, NULL),
+  ('student_status', 'Student has an active enrollment status', 1, JSON_ARRAY('active')),
+  ('other_requirements', 'No unresolved enrollment-blocking requirement', 1, NULL);
+
+INSERT INTO enrollment_document_types (document_name, is_required) VALUES
+  ('Previous semester grade report', 1),
+  ('Student identification', 1);
+
+INSERT INTO enrollment_schedules (year_level, week_number, start_date, end_date, status) VALUES
+  ('First Year', 1, '2026-11-09', '2026-11-13', 'Active'),
+  ('Second Year', 2, '2026-11-16', '2026-11-20', 'Active'),
+  ('Third Year', 3, '2026-11-23', '2026-11-27', 'Active'),
+  ('Fourth Year', 4, '2026-11-30', '2026-12-04', 'Active');
+
+INSERT INTO enrollment_daily_capacity (appointment_date)
+SELECT DISTINCT DATE_ADD(schedules.start_date, INTERVAL offsets.day_offset DAY)
+FROM enrollment_schedules AS schedules
+CROSS JOIN (
+  SELECT 0 AS day_offset UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL
+  SELECT 3 UNION ALL SELECT 4
+) AS offsets
+WHERE schedules.status = 'Active';
+
+INSERT INTO enrollment_schedule_days (schedule_id, appointment_date)
+SELECT schedules.schedule_id, DATE_ADD(schedules.start_date, INTERVAL offsets.day_offset DAY)
+FROM enrollment_schedules AS schedules
+CROSS JOIN (
+  SELECT 0 AS day_offset UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL
+  SELECT 3 UNION ALL SELECT 4
+) AS offsets
+WHERE schedules.status = 'Active';
+
+INSERT INTO enrollment_appointment_slots (slot_date, slot_time, capacity)
+SELECT days.appointment_date, times.slot_time, 150
+FROM enrollment_schedule_days AS days
+CROSS JOIN (
+  SELECT '08:00:00' AS slot_time UNION ALL SELECT '09:00:00' UNION ALL
+  SELECT '10:00:00' UNION ALL SELECT '13:00:00' UNION ALL
+  SELECT '14:00:00'
+) AS times
+WHERE days.is_open = 1;
 
 INSERT INTO role_permissions (role_id, permission_key)
 SELECT r.id, p.permission_key
 FROM roles AS r
 JOIN (
+  SELECT 'SHARED_ADMIN' AS role_key, 'system.*' AS permission_key UNION ALL
+  SELECT 'SHARED_ADMIN', 'appointments.*' UNION ALL
+  SELECT 'SHARED_ADMIN', 'students.*' UNION ALL
+  SELECT 'SHARED_ADMIN', 'admins.*' UNION ALL
+  SELECT 'SHARED_ADMIN', 'roles.assign' UNION ALL
+  SELECT 'SHARED_ADMIN', 'enrollment_records.*' UNION ALL
+  SELECT 'SHARED_ADMIN', 'clearances.*' UNION ALL
+  SELECT 'SHARED_ADMIN', 'payments.*' UNION ALL
+  SELECT 'SHARED_ADMIN', 'reports.read' UNION ALL
+  SELECT 'SHARED_ADMIN', 'activity_logs.read' UNION ALL
+  SELECT 'SHARED_ADMIN', 'announcements.*' UNION ALL
   SELECT 'MIS' AS role_key, 'system.*' AS permission_key UNION ALL
   SELECT 'MIS', 'appointments.*' UNION ALL
   SELECT 'MIS', 'students.*' UNION ALL

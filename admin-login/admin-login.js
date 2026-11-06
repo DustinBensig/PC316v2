@@ -82,10 +82,10 @@
   }
 
   const form = document.querySelector("#admin-login-form");
+  if (!form) return;
+
   const message = document.querySelector("#login-message");
-  const submit = form?.querySelector('[type="submit"]');
-  const password = document.querySelector("#admin-password");
-  const toggle = document.querySelector(".password-toggle");
+  const submit = form.querySelector('[type="submit"]');
 
   const showError = (text) => { message.textContent = text; message.hidden = false; };
 

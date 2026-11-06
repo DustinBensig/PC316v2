@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EnrollEase | Login</title>
+    <title>CTU Daanbantayan Campus Enrollment System | Login</title>
     <link rel="stylesheet" href="login.css">
     <link rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -15,7 +15,7 @@
         <header class="navbar">
             <a href="#" class="logo">
                 <i class="fa-solid fa-graduation-cap"></i>
-                <span>EnrollEase</span>
+                <span>CTU Daanbantayan Campus</span>
             </a>
 
             <div class="register">
@@ -54,6 +54,7 @@
                                placeholder="Email, Student ID, or Admin Email"
                                required>
                     </div>
+                    <small id="error-loginId" class="error"></small>
 
                     <div class="input-box">
                         <i class="fa-solid fa-lock"></i>
@@ -65,6 +66,7 @@
                         <i class="fa-regular fa-eye eye-icon"
                            id="togglePassword"></i>
                     </div>
+                    <small id="error-loginPassword" class="error"></small>
 
                     <div class="form-options">
                         <label>
@@ -80,6 +82,7 @@
                     </button>
 
                 </form>
+                <p class="admin-login-option">Are you an administrator? <a href="admin-login/admin-login.html">Admin Login</a></p>
 
             </section>
 

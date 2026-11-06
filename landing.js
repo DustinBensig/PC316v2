@@ -1,3 +1,26 @@
+  const nextEnrollmentDate = document.querySelector('#next-enrollment-date');
+  if (nextEnrollmentDate) {
+    fetch('api/enrollment-schedule.php', { headers: { Accept: 'application/json' } })
+      .then(async response => {
+        if (!response.ok) throw new Error('Enrollment schedule is unavailable.');
+        return response.json();
+      })
+      .then(result => {
+        if (!result.success || !result.nextEnrollmentDate) return;
+        const date = new Date(result.nextEnrollmentDate + 'T00:00:00Z');
+        if (Number.isNaN(date.getTime())) return;
+        nextEnrollmentDate.textContent = new Intl.DateTimeFormat('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC'
+        }).format(date);
+      })
+      .catch(() => {
+        nextEnrollmentDate.textContent = 'Schedule not announced';
+      });
+  }
+
   const navigationLinks = [...document.querySelectorAll('.nav-links a[href^="#"]')];
   const navigationSections = navigationLinks
     .map(link => document.querySelector(link.getAttribute('href')))
