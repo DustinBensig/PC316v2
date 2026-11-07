@@ -49,27 +49,31 @@
 
                 <form action="#" method="post" id="loginForm" novalidate>
 
-                    <div class="input-box">
-                        <i class="fa-solid fa-user"></i>
-                        <input type="text"
-                               id="loginId"
-                               name="loginId"
-                               placeholder="Email Address or Student ID"
-                               required>
+                    <div class="field-group">
+                        <div class="input-box">
+                            <i class="fa-solid fa-user"></i>
+                            <input type="text"
+                                   id="loginId"
+                                   name="loginId"
+                                   placeholder="Email Address or Student ID"
+                                   required>
+                        </div>
+                        <small id="error-loginId" class="error"></small>
                     </div>
-                    <small id="error-loginId" class="error"></small>
 
-                    <div class="input-box">
-                        <i class="fa-solid fa-lock"></i>
-                        <input type="password"
-                               id="loginPassword"
-                               name="loginPassword"
-                               placeholder="Password"
-                               required>
-                        <i class="fa-regular fa-eye eye-icon"
-                           id="togglePassword"></i>
+                    <div class="field-group">
+                        <div class="input-box">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password"
+                                   id="loginPassword"
+                                   name="loginPassword"
+                                   placeholder="Password"
+                                   required>
+                            <i class="fa-regular fa-eye eye-icon"
+                               id="togglePassword"></i>
+                        </div>
+                        <small id="error-loginPassword" class="error"></small>
                     </div>
-                    <small id="error-loginPassword" class="error"></small>
 
                     <div class="form-options">
                         <label>

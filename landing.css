@@ -6,79 +6,88 @@
 
 html {
     scroll-behavior: smooth;
+    scroll-padding-top: 100px;
+    overflow-x: hidden;
 }
 
 body {
-    height: 100vh;
-    padding: 8px 22px 10px;
+    min-height: 100vh;
+    padding: 0;
+    margin: 0;
     color: #fffefe;
-    font-size: 500px;
+    font-size: 14px;
     font-family: Arial, Helvetica, sans-serif;
     background: url('img/bg.png');
-    background-position: 0cm;
     background-repeat: no-repeat;
-    background-size: 100% 130%;
-    background-position:center;
+    background-size: cover;
+    background-position: center top;
     background-attachment: fixed;
-
+    overflow-x: hidden;
 }
 
 .page {
-    min-height: 527px;
+    min-height: 100vh;
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
-    padding: 10px 32px 50px;
-    overflow: hidden;
-    padding-left: 15px;
+    padding: 16px 24px 50px;
+    overflow-x: hidden;
 }
+
+/* NAVBAR */
 
 .navbar {
     position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(1200px, calc(100% - 32px));
     display: flex;
     align-items: center;
-    min-height: 48px;
-    gap: 50px;
-    background-color: black;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 8px 20px;
+    gap: 16px;
     border-radius: 50px;
-    padding-left: 28px;
-    padding-right: 96px;
-    box-shadow: 1px 5px 13px rgb(0, 0, 0);
-    background: rgba(41, 27, 143, 0);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(2px);
-    z-index: 1;
+    background: rgba(13, 27, 62, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 1000;
 }
 
 .brand {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     color: #ffffff;
     text-decoration: none;
     font-size: 15px;
     font-weight: 700;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .brand-icon {
-    width: 40px;
-    height: 35px;
+    width: 36px;
+    height: 32px;
+    flex-shrink: 0;
 }
 
 .nav-links {
     display: flex;
     align-items: center;
-    gap: 30px;
-    margin-left: 50px;
+    gap: 24px;
+    margin: 0;
 }
 
 .nav-links a {
     position: relative;
     padding: 8px 0;
     color: #f9f6f6;
-    font-size: 14.5px;
-    font-weight: 530;
+    font-size: 14px;
+    font-weight: 500;
     text-decoration: none;
     white-space: nowrap;
     transition: color 0.2s ease;
@@ -94,7 +103,7 @@ body {
     content: "";
     left: 0;
     bottom: 1px;
-    width: 41px;
+    width: 100%;
     height: 2px;
     border-radius: 5px;
     background: #fffcfc;
@@ -103,222 +112,169 @@ body {
 .nav-actions {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-left: 315px;
-    margin-right: -70px;
+    gap: 10px;
+    margin: 0;
+    flex-shrink: 0;
 }
-
-.nav-actions a{
-    font-size: 14.5px;
-    font-weight:lighter;
-    padding: 90;
-    padding-left: 60;
-    padding-right: 100;
-}
-
-
 
 .button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 1px;
-    min-height: 29px;
-    border: 0.5px solid transparent;
+    gap: 4px;
+    height: 34px;
+    padding: 0 16px;
+    border: 1px solid transparent;
     border-radius: 50px;
     color: #ffffff;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     text-decoration: none;
-    transition: background 0.2s ease, transform 0.2s ease;
-    
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
 }
 
 .button:hover {
-    transform: translateX(-1px);
+    transform: translateY(-1px);
 }
 
 .button-login {
-    min-width: 100px;
-    height: 32px;
-    border-color: #f6f0f0;
-    background: #242e9e00;
-    padding-right:30px;
-    padding-left: 30px;
-    padding-top: 10px;
-    padding-bottom:10px;
-
-
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .button-login:hover {
-    background: #0f133b;
-}
-
-.button-register,
-
-.button-primary {
-    background: #2031b1;
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #ffffff;
 }
 
 .button-register {
-    min-width: 75px;
-    height: 32px;
-    padding-right:20px;
-    padding-left: 20px;
-    padding-top: 10px;
-    padding-bottom:10px;
+    background: #2563eb;
+    border-color: #2563eb;
 }
 
-.button-register:hover,
-.button-primary:hover {
-    background: #14193d;
+.button-register:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
 }
+
+/* HERO SECTION */
 
 .hero {
     display: grid;
-    grid-template-columns: minmax(350px, 1fr) minmax(280px, 1fr);
-    align-items: start;
-    gap: 5x;
-    padding: 190px 8px 0;
-    height: 100vh;
+    grid-template-columns: minmax(320px, 1.2fr) minmax(280px, 0.8fr);
+    align-items: center;
+    gap: 36px;
+    padding: 130px 8px 60px;
+    min-height: calc(100vh - 40px);
 }
 
 .hero-copy {
-    max-width: 100%;
+    max-width: 540px;
 }
 
 .eyebrow {
-    margin-bottom: 5px;
-    color: #f0f0f0;
-    font-size: 20px;
+    margin-bottom: 8px;
+    color: #cbd5e1;
+    font-size: 14px;
     font-weight: 700;
-    letter-spacing: 0.1px;
-    padding-bottom: 10px;
-    
+    letter-spacing: 1px;
 }   
 
 h1 {
-    margin-bottom: 14px;
-    font-size: clamp(68px, 4.2vw, 44px);
+    margin-bottom: 16px;
+    font-size: clamp(38px, 4.5vw, 56px);
     font-weight: 800;
-    letter-spacing: -1.8px;
-    line-height: 1.18;
+    letter-spacing: -1.2px;
+    line-height: 1.15;
 }
 
 .description {
-    margin-left: 4px;
-    color: #ededed;
-    font-size: 17px;
-    line-height: 1.23;
-    padding-top: 7px;
+    color: #e2e8f0;
+    font-size: 16px;
+    line-height: 1.55;
+    margin-bottom: 8px;
 }
 
 .hero-buttons {
     display: flex;
-    gap: 25px;
-    margin: 38px 0 0 13px;
-    
+    align-items: center;
+    gap: 16px;
+    margin-top: 32px;
 }
 
 .hero-buttons .button {
-    font-weight: 30px;
-    font-size: 15px;
-    padding-right:45px;
-    padding-left: 45px;
-    padding-top: 10px;
-    padding-bottom:10px;
+    height: 44px;
+    padding: 0 28px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
 }
 
-
 .button-primary {
-    min-width: 126px;
-    border-color: #0016df;
-    padding-right:35px;
-    padding-left: 35px;
-    padding-top: 19px;
-    padding-bottom:10px;
-    box-shadow: 1px 5px 13px rgb(0, 0, 0);
-    background: rgb(61, 46, 174);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(2px);
-    border: solid #ffffff53 1px;
-    border-radius: 7px;
-    padding: 20px;
-    transform: translateX(20px);
+    background: #2563eb;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+}
+
+.button-primary:hover {
+    background: #1d4ed8;
 }
 
 .button-secondary {
-    min-width: 126px;
-    border-color: #fafafa;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
-    box-shadow: 1px 5px 13px rgb(0, 0, 0);
-    background: rgba(41, 27, 143, 0);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(2px);
-    border: solid #ffffff9a 1px;
-    border-radius: 7px;
-    padding: 20px;
-    transform: translateX(20px);
-    
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
 }
 
 .button-secondary:hover {
-    background: #120b2eed;
+    background: rgba(255, 255, 255, 0.18);
 }
+
+/* HERO CARDS */
 
 .hero-cards {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: -20px;
-    padding-top: -1px;
-    padding-left: 200px;
-  
+    align-items: flex-end;
+    gap: 20px;
+    width: 100%;
 }
 
 .enrollment-card {
     display: flex;
     align-items: center;
-    gap: 12px;
-    width: 350px;
-    min-height: 120px;
-    padding: 20px 15px;
-    box-shadow: 1px 5px 13px rgb(0, 0, 0);
-    background: rgba(41, 27, 143, 0);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(2px);
-    border: solid #ffffff 1px;
+    gap: 16px;
+    width: min(100%, 360px);
+    min-height: 100px;
+    padding: 20px 22px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    background: rgba(13, 27, 62, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 14px;
-    padding: 20px; 
-
 }
 
-
 .calendar-icon {
-    position: fixed;
-    display: grid;
-    flex: 0 0 51px;
-    place-items: center;
-    width: 80px;
-    height: 80px;
-    border: 1px solid #343d87;
-    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
     color: #ffffff;
-    background: linear-gradient(145deg, #6475f229, #4d58f2);
-    box-shadow: 1px 5px 13px rgb(0, 0, 0);
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
-    border: solid #ffffff00 1px;
-    border-radius: 14px;
-    padding: 20px; 
+    background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .calendar-icon svg {
-    width: 60px;
-    height: 60px;
-    position:fixed;
-    
+    width: 32px;
+    height: 32px;
 }
 
 .date-copy {
@@ -327,78 +283,77 @@ h1 {
 }
 
 .date-copy p {
-    margin-bottom: 5px;
-    color: #eeeeee;
-    font-size: 14px;
+    margin-bottom: 4px;
+    color: #cbd5e1;
+    font-size: 13px;
     font-weight: 500;
-    white-space: nowrap;
-    padding-left: 100px;
-    transform: translateY(-10px); 
-
 }
 
 .date-copy h2 {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 700;
-    white-space: nowrap;
-    padding-left: 100px; 
-    transform: translateY(-10px); 
-}
-
-.arrow-circle,
-.check-circle {
-    display: grid;
-    flex: 0 0 auto;
-    place-items: center;
-    border-radius: 50%;
     color: #ffffff;
-    background: #3b50d2;
-    font-weight: 700;
-    padding-left: 2px;
+    line-height: 1.3;
 }
 
 .schedule-card {
     display: flex;
     align-items: center;
-    gap: 9px;
-    min-width: 200px;
-    min-height: 45px;
-    margin-left: 150px;
-    box-shadow: 1px 5px 13px rgb(0, 0, 0);
-    background: rgba(41, 27, 143, 0);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(2px);
-    border: solid #ffffff9a 1px;
-    border-radius: 7px;
-    padding: 20px; 
-    transform: translateY(40px); 
-
-
+    gap: 12px;
+    width: min(100%, 260px);
+    min-height: 60px;
+    padding: 14px 18px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    background: rgba(13, 27, 62, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    align-self: flex-end;
 }
 
 .check-circle {
-    width: 30px;
-    height: 30px;
-    font-size: 15px;
-}   
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: #ffffff;
+    background: #10b981;
+    font-size: 14px;
+    font-weight: 700;
+}
 
 .schedule-card p {
-    color: #eeeeee;
-    font-size: 15px;
+    color: #e2e8f0;
+    font-size: 13px;
     font-weight: 600;
     line-height: 1.35;
-    transform: translateX(10px); 
-    text-align:justify;
-
 }
+
+/* RESPONSIVE MEDIA QUERIES */
 
 @media (min-width: 1100px) {
     .page {
         min-height: 650px;
     }
+}
 
-    .hero {
-        padding-top: 125px;
+@media (max-width: 950px) {
+    .nav-links {
+        gap: 16px;
+    }
+    .nav-links a {
+        font-size: 13px;
+    }
+    .nav-actions {
+        gap: 6px;
+    }
+    .button {
+        padding: 0 12px;
+        font-size: 12px;
+        height: 32px;
     }
 }
 
@@ -409,44 +364,61 @@ h1 {
 
     .page {
         min-height: 100vh;
-        padding: 18px 22px 48px;
+        padding: 16px 16px 48px;
     }
 
     .navbar {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 20px);
+        padding: 10px 14px;
+        border-radius: 20px;
         flex-wrap: wrap;
-        gap: 14px;
+        gap: 10px;
     }
 
     .brand-icon {
-        width: 39px;
-        height: 34px;
+        width: 32px;
+        height: 28px;
     }
 
     .brand {
-        font-size: 16px;
+        font-size: 14px;
     }
 
     .nav-actions {
         margin-left: auto;
         margin-right: 0;
+        gap: 6px;
+    }
+
+    .nav-actions .button {
+        padding: 0 10px;
+        height: 30px;
+        font-size: 11.5px;
     }
 
     .nav-links {
         order: 3;
         width: 100%;
-        gap: 20px;
+        gap: 16px;
         margin: 0;
         overflow-x: auto;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     .nav-links a {
-        font-size: 11px;
+        font-size: 12px;
     }
 
     .hero {
         grid-template-columns: 1fr;
-        gap: 48px;
-        padding: 76px 0 0;
+        gap: 36px;
+        padding: 120px 0 0;
+        min-height: auto;
     }
 
     .hero-copy {
@@ -454,11 +426,11 @@ h1 {
     }
 
     h1 {
-        font-size: clamp(38px, 9vw, 48px);
+        font-size: clamp(34px, 8vw, 44px);
     }
 
     .description {
-        font-size: 13px;
+        font-size: 14px;
         line-height: 1.5;
     }
 
@@ -468,72 +440,45 @@ h1 {
 
     .hero-buttons {
         flex-wrap: wrap;
-        margin-top: 28px;
-        margin-left: 0;
+        margin-top: 24px;
     }
 
     .hero-cards {
-        padding-left: 0;
-        gap: 22px;
+        align-items: flex-start;
+        gap: 16px;
     }
 
     .enrollment-card {
-        width: min(100%, 300px);
+        width: 100%;
+        max-width: 340px;
     }
 
     .schedule-card {
-        margin-left: min(100px, 27vw);
+        width: 100%;
+        max-width: 240px;
+        align-self: flex-start;
     }
 }
 
-@media (max-width: 390px) {
-    .page {
-        padding-right: 16px;
-        padding-left: 16px;
-    }
-
-    .nav-actions .button {
-        min-width: auto;
-        padding: 0 12px;
-    }
-
-    .nav-links {
-        gap: 15px;
-    }
-
-    .enrollment-card {
-        gap: 8px;
-        padding: 12px 9px;
-    }
-
-    .date-copy p {
-        font-size: 10px;
-    }
-
-    .date-copy h2 {
+@media (max-width: 420px) {
+    .brand span {
         font-size: 13px;
     }
-}
-
-html {
-    scroll-behavior:smooth;
-    scroll-padding-top: 100px;
-}
-
-
-body {
-    background: url('img/bg.png');
-    background-position: 0cm;
-    background-size: 100% 130%;
-    background-position:center;
-    background-attachment: fixed;
+    .nav-actions .button {
+        padding: 0 8px;
+        font-size: 10.5px;
+        height: 28px;
+    }
+    .hero-buttons .button {
+        width: 100%;
+    }
 }
 
 .content-section {
     position: relative;
     isolation: isolate;
     width: 100%;
-    height: 100vh;
+    min-height: 550px; height: auto;
     margin: 180px 0 32px;
     padding: 10px 5% 10px;
     box-sizing: border-box;
