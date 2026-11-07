@@ -84,6 +84,7 @@ try {
 
     admin_json_response([
         'success' => true,
+        'csrf_token' => $_SESSION['admin_csrf_token'],
         'admin' => [
             'name' => trim($account['first_name'] . ' ' . $account['last_name']),
             'username' => $account['username'],

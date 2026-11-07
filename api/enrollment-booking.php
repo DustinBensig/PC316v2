@@ -1,6 +1,31 @@
 <?php
 declare(strict_types=1);
 
+function normalize_year_level(string $yearLevel): ?string
+{
+    $normalized = strtolower(trim($yearLevel));
+    $canonical = [
+        '1st year' => '1st Year',
+        'first year' => '1st Year',
+        '1st' => '1st Year',
+        'first' => '1st Year',
+        '2nd year' => '2nd Year',
+        'second year' => '2nd Year',
+        '2nd' => '2nd Year',
+        'second' => '2nd Year',
+        '3rd year' => '3rd Year',
+        'third year' => '3rd Year',
+        '3rd' => '3rd Year',
+        'third' => '3rd Year',
+        '4th year' => '4th Year',
+        'fourth year' => '4th Year',
+        '4th' => '4th Year',
+        'fourth' => '4th Year',
+    ];
+
+    return $canonical[$normalized] ?? null;
+}
+
 function enrollment_year_assignment(string $yearLevel): ?array
 {
     $normalized = strtolower(trim($yearLevel));
@@ -29,13 +54,15 @@ function enrollment_schedule_for_student(PDO $database, string $yearLevel): ?arr
         return null;
     }
 
+    $canonical = normalize_year_level($yearLevel);
     $query = $database->prepare(
         'SELECT schedule_id, year_level, week_number, start_date, end_date, status
          FROM enrollment_schedules
-         WHERE year_level = ? AND week_number = ? AND status = \'Active\'
+         WHERE (LOWER(year_level) = LOWER(?) OR LOWER(year_level) = LOWER(?) OR week_number = ?)
+           AND status = \'Active\'
          LIMIT 1'
     );
-    $query->execute([$assignment['year_level'], $assignment['week_number']]);
+    $query->execute([$assignment['year_level'], $canonical ?? $assignment['year_level'], $assignment['week_number']]);
     $schedule = $query->fetch();
     return $schedule ?: null;
 }
@@ -87,11 +114,13 @@ function enrollment_lock_schedule_days(PDO $database, string $yearLevel, array $
     $query->execute($dates);
 
     $days = [];
+    $canonical = normalize_year_level($yearLevel);
     foreach ($query->fetchAll() as $day) {
         if (
             $assignment &&
-            $day['year_level'] === $assignment['year_level'] &&
-            (int)$day['week_number'] === $assignment['week_number']
+            (strcasecmp((string)$day['year_level'], (string)$assignment['year_level']) === 0 ||
+             ($canonical && strcasecmp((string)$day['year_level'], (string)$canonical) === 0) ||
+             (int)$day['week_number'] === (int)$assignment['week_number'])
         ) {
             $days[$day['appointment_date']] = $day;
         }

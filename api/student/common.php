@@ -124,6 +124,7 @@ function student_profile(PDO $database, int $userId): ?array
          INNER JOIN students AS s ON s.user_id = u.id
          LEFT JOIN campuses ON campuses.campus_id = s.campus_id
          WHERE u.id = ? AND u.account_type = \'student\' AND u.is_active = 1
+           AND s.student_status = \'Active\'
          LIMIT 1'
     );
     $query->execute([$userId]);
@@ -161,6 +162,7 @@ function student_require_profile(PDO $database): array
     $userId = filter_var($_SESSION['student_user_id'] ?? null, FILTER_VALIDATE_INT);
     $profile = $userId ? student_profile($database, (int)$userId) : null;
     if (!$profile) {
+        unset($_SESSION['student_user_id'], $_SESSION['student_last_activity'], $_SESSION['student_csrf_token']);
         student_json_response(['success' => false, 'message' => 'Student sign-in is required.'], 401);
     }
     if (($profile['campus_name'] ?? null) !== 'Daanbantayan Campus') {
@@ -175,6 +177,30 @@ function student_campus_access_denied(): void
         'success' => false,
         'message' => 'Access denied. This enrollment system is exclusively for CTU Daanbantayan Campus students.',
     ], 403);
+}
+
+function student_mail_is_configured(): bool
+{
+    $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+    if (!is_file($autoload)) {
+        return false;
+    }
+    $mailConfigFile = dirname(__DIR__, 2) . '/config/mail.php';
+    if (!is_file($mailConfigFile)) {
+        return false;
+    }
+    try {
+        $configuration = require $mailConfigFile;
+        if (!is_array($configuration)) {
+            return false;
+        }
+        return !empty($configuration['host']) &&
+               !empty($configuration['username']) &&
+               !empty($configuration['password']) &&
+               filter_var($configuration['from_email'] ?? '', FILTER_VALIDATE_EMAIL) !== false;
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 function student_send_appointment_email(array $profile, array $appointment, string $event): bool

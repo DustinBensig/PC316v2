@@ -24,7 +24,7 @@ try {
         ], 429);
     }
     $query = $database->prepare(
-        'SELECT u.id, u.password_hash, campuses.campus_name
+        'SELECT u.id, u.password_hash, campuses.campus_name, s.student_status
          FROM users AS u
          INNER JOIN students AS s ON s.user_id = u.id
          LEFT JOIN campuses ON campuses.campus_id = s.campus_id
@@ -37,6 +37,9 @@ try {
     if (!$account || !password_verify($password, $account['password_hash'])) {
         auth_rate_limit_record_attempt($database, 'student-login', $loginId);
         student_json_response(['success' => false, 'message' => 'The email/student number or password is incorrect.'], 401);
+    }
+    if (($account['student_status'] ?? '') !== 'Active') {
+        student_json_response(['success' => false, 'message' => 'Your student account is currently inactive. Please contact the registrar.'], 403);
     }
     if ($account['campus_name'] !== 'Daanbantayan Campus') {
         student_campus_access_denied();

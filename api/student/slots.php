@@ -59,15 +59,25 @@ try {
     $currentDateQuery = $database->prepare('SELECT CURRENT_DATE');
     $currentDateQuery->execute();
     $currentDate = (string)$currentDateQuery->fetchColumn();
-    if ($currentDate < $schedule['start_date'] || $currentDate > $schedule['end_date']) {
+    if ($currentDate < $schedule['start_date']) {
         student_json_response([
-            'success' => true,
+            'success' => false,
             'eligible' => true,
             'student' => student_public_profile($profile),
             'schedule' => $schedule,
             'slots' => [],
-            'message' => 'You can only book an appointment during your assigned enrollment week.',
-        ]);
+            'message' => 'Booking has not opened yet for your year level (opens on ' . $schedule['start_date'] . ').',
+        ], 422);
+    }
+    if ($currentDate > $schedule['end_date']) {
+        student_json_response([
+            'success' => false,
+            'eligible' => true,
+            'student' => student_public_profile($profile),
+            'schedule' => $schedule,
+            'slots' => [],
+            'message' => 'The booking window for your year level has closed (closed on ' . $schedule['end_date'] . ').',
+        ], 422);
     }
 
     $activeQuery = $database->prepare(

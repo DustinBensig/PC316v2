@@ -58,3 +58,14 @@ The administrator dashboard includes **Student Management** for authorized main 
 Rate limiting uses the database-backed `auth_rate_limits` table in the fresh schema. For an existing database, apply `database/migrations/20261106_create_auth_rate_limits.sql`. Login and registration requests are limited by both the client IP address and the normalized login identifier; retry responses include a `Retry-After` header and `retryAfter` seconds.
 
 The browser stores the student CSRF token and display-session key in `sessionStorage` only. Both keys are removed from `localStorage` and `sessionStorage` on any student API `401` response and on logout.
+
+## Recent Updates (November 2026)
+
+- **Year Level Canonical Format**: Year levels are canonicalized to `1st Year`, `2nd Year`, `3rd Year`, and `4th Year`. Applied via `database/migrations/20261106_normalize_student_year_levels.sql`.
+- **Shared Admin & Admin Accounts Manager**: Removed legacy role-specific login stubs; all admins log in through `admin-login/admin-login.html`. Main administrators can manage department administrator accounts directly in the admin dashboard under **Admin accounts**.
+- **Academic Status**: Students now have an `academic_status` (Regular, Irregular, Returnee, Transferee, Shiftee, New Student) displayed on their profile/enrollment details and editable in Student Management.
+- **Enrolled Student Registry & CSV Import**: Validates self-registering students against the official enrolled registry when `require_registry_match` is enabled. Administrators can upload/import enrolled student CSV lists via `api/admin/registry.php` and the Student Management panel. Schema defined in `database/migrations/20261106_create_enrolled_student_registry.sql`.
+- **Password Policy**: Student and administrator passwords enforce 8–72 characters with at least one letter and one number across all registration, management, and change-password forms.
+- **Email Notifications**: Booking, rescheduling, and cancellation now cleanly report when email notifications are not enabled without producing false delivery warning errors.
+- **Eligibility Settings & Item Removal**: Administrators can configure allowed academic statuses, manage document types, and remove individual eligibility items (subjects, balances, holds, requirements) with full audit logging.
+- **Booking Window Clarity**: Clear messaging when booking has not opened yet (`Booking opens on <date>`), when it has closed, or when an appointment date falls outside the student's assigned week.

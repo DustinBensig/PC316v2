@@ -312,8 +312,13 @@ function h($value): string
     <a class="brand" href="../landing.html"><span class="brand-mark">E</span><span class="brand-name">enroll<span>ease</span></span></a>
     <div class="nav-label">Administration</div>
     <nav class="nav-list" aria-label="Admin navigation">
-      <a class="nav-link" href="dashboard.php?section=appointments">▦ Enrollment appointments</a>
-      <a class="nav-link active" href="schedules.php">▣ Schedules and capacity</a>
+      <a class="nav-link" href="dashboard.php?section=appointments"><span class="nav-icon">▦</span>Enrollment appointments</a>
+      <a class="nav-link" href="dashboard.php?section=eligibility"><span class="nav-icon">✓</span>Eligibility rules</a>
+      <a class="nav-link" href="dashboard.php?section=eligibility-records"><span class="nav-icon">♙</span>Student eligibility records</a>
+      <a class="nav-link" href="dashboard.php?section=students"><span class="nav-icon">♙</span>Student Management</a>
+      <a class="nav-link" href="dashboard.php?section=admins"><span class="nav-icon">👥</span>Admin accounts</a>
+      <a class="nav-link" href="dashboard.php?section=enrollments"><span class="nav-icon">▧</span>Enrollment records</a>
+      <a class="nav-link active" href="schedules.php"><span class="nav-icon">▣</span>Schedules and capacity</a>
     </nav>
     <div class="sidebar-bottom"><div class="role-card"><small>Shared administrator</small><strong><?= h($admin['name']) ?></strong><span class="role-badge">Administrator</span></div></div>
   </aside>

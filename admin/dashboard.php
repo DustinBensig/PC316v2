@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../api/admin/common.php';
+require_once __DIR__ . '/../api/enrollment-booking.php';
 require_once __DIR__ . '/../api/student/common.php';
 require_once __DIR__ . '/../api/enrollment-eligibility.php';
 start_admin_session();
@@ -18,15 +19,17 @@ $sections = [
     'eligibility' => 'Eligibility rules',
     'eligibility-records' => 'Student eligibility records',
     'students' => 'Student Management',
+    'admins' => 'Admin accounts',
     'enrollments' => 'Enrollment records',
     'clearances' => 'Clearances',
     'payments' => 'Payments',
 ];
 $sectionDescriptions = [
     'appointments' => 'Search enrollment appointments, review eligibility, and update appointment status.',
-    'eligibility' => 'View and enable or disable enrollment eligibility checks.',
+    'eligibility' => 'View and manage enrollment eligibility checks and allowed academic statuses.',
     'eligibility-records' => 'Update student eligibility records and immediately review the booking checks.',
     'students' => 'Search, review, add, edit, activate, and deactivate Daanbantayan Campus student accounts.',
+    'admins' => 'Manage administrator accounts, assign roles, and configure system permissions.',
     'enrollments' => 'Review submitted enrollment records and their current status.',
     'clearances' => 'Review student clearance records across all offices.',
     'payments' => 'Review payment records across all offices.',
@@ -36,6 +39,7 @@ $sectionIcons = [
     'eligibility' => '✓',
     'eligibility-records' => '♙',
     'students' => '♙',
+    'admins' => '👥',
     'enrollments' => '▧',
     'clearances' => '✓',
     'payments' => '₱',
@@ -539,7 +543,7 @@ function h($value): string
     <div class="nav-label">Administration</div>
     <nav class="nav-list" aria-label="Admin navigation">
       <?php foreach ($sections as $key => $label): ?>
-        <?php if (admin_can_read_section($database, $admin, $key)): ?>
+        <?php if (!in_array($key, ['clearances', 'payments'], true) && admin_can_read_section($database, $admin, $key)): ?>
           <a class="nav-link <?= $section === $key ? 'active' : '' ?>" href="dashboard.php?section=<?= h($key) ?>"><span class="nav-icon"><?= h($sectionIcons[$key]) ?></span><?= h($label) ?></a>
         <?php endif; ?>
       <?php endforeach; ?>
@@ -577,16 +581,81 @@ function h($value): string
       <?php if (!$canRead): ?>
         <div class="notice" role="status">Your administrator account does not have permission to view this section.</div>
       <?php elseif ($section === 'eligibility'): ?>
-      <section class="panel">
-        <p>These checks are mandatory and are re-evaluated in PHP immediately before every booking. They cannot be switched off from the admin interface.</p>
-        <ul>
-          <li>Active student account and recognized year level</li>
-          <li>No missing, incomplete, failed, or deficient grades</li>
-          <li>No outstanding financial balance</li>
-          <li>No active enrollment holds</li>
-          <li>All required enrollment documents verified</li>
-          <li>No unresolved enrollment-blocking requirement</li>
-        </ul>
+      <section class="panel" id="eligibility-settings-manager" data-csrf="<?= h($_SESSION['admin_csrf_token']) ?>">
+        <div class="toolbar" style="margin-bottom: 20px;">
+          <div>
+            <h2 style="margin: 0 0 4px; font-size: 18px;">Enrollment Eligibility Configuration</h2>
+            <p class="panel-caption" style="margin: 0;">Configure dynamic enrollment criteria, allowed academic statuses, and document verification prerequisites.</p>
+          </div>
+        </div>
+        
+        <p id="eligibility-settings-message" class="notice" hidden></p>
+        
+        <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 24px;">
+          <h3 style="margin-top: 0; font-size: 15px; color: var(--navy); display: flex; align-items: center; gap: 8px;">
+            <span>🛡</span> Mandatory System Integrity Checks
+          </h3>
+          <p class="panel-caption" style="margin-bottom: 12px;">These core integrity rules are enforced directly by the server engine prior to confirming any appointment:</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; font-size: 13px;">
+            <div style="background: #fff; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 6px;">✓ Daanbantayan Campus student account</div>
+            <div style="background: #fff; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 6px;">✓ Active account &amp; assigned year level</div>
+            <div style="background: #fff; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 6px;">✓ No missing, incomplete, or failed grades</div>
+            <div style="background: #fff; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 6px;">✓ Zero outstanding balance (₱0.00)</div>
+            <div style="background: #fff; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 6px;">✓ No active administrative holds</div>
+            <div style="background: #fff; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 6px;">✓ All required documents verified</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr; gap: 24px;">
+          <!-- Allowed Academic Statuses Form -->
+          <div style="background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 20px;">
+            <h3 style="margin: 0 0 6px; font-size: 16px;">Allowed Academic Statuses</h3>
+            <p class="panel-caption" style="margin-bottom: 16px;">Check all student academic statuses that are permitted to book enrollment appointments.</p>
+            <form id="allowed-statuses-form">
+              <div id="statuses-checkboxes" style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <span class="muted" style="font-size: 13px;">Loading allowed statuses...</span>
+              </div>
+              <button type="submit" class="button primary">Save Allowed Statuses</button>
+            </form>
+          </div>
+
+          <!-- Document Requirements Manager -->
+          <div style="background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <h3 style="margin: 0 0 4px; font-size: 16px;">Required Enrollment Documents</h3>
+                <p class="panel-caption" style="margin: 0;">Configure document types that students must submit and have verified before booking.</p>
+              </div>
+            </div>
+            <div class="table-wrap" style="margin-bottom: 20px;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Document Name</th>
+                    <th>Requirement Type</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="doc-types-table-body">
+                  <tr><td colspan="4" class="empty-state">Loading document types...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+              <h4 style="margin: 0 0 10px; font-size: 14px;">Add New Document Type</h4>
+              <form id="add-doc-type-form" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+                <input type="text" name="name" placeholder="Document name (e.g. Certificate of Good Moral)" required style="flex: 1; min-width: 250px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px;">
+                <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: normal; cursor: pointer;">
+                  <input type="checkbox" name="isRequired" checked>
+                  <span>Mandatory prerequisite</span>
+                </label>
+                <button type="submit" class="button primary">Add Document</button>
+              </form>
+            </div>
+          </div>
+        </div>
       </section>
       <?php elseif ($section === 'eligibility-records'): ?>
       <section class="panel" id="student-eligibility-manager" data-csrf="<?= h($_SESSION['admin_csrf_token']) ?>">
@@ -694,6 +763,33 @@ function h($value): string
           </div>
           <p class="panel-caption" style="margin-top:14px">Appointments are retained for audit history. Use the Cancelled status instead of deleting a record.</p>
         </section>
+        <?php elseif ($section === 'admins' && $canRead): ?>
+        <section class="panel" id="admin-accounts-manager"
+                 data-csrf="<?= h($_SESSION['admin_csrf_token']) ?>">
+          <div class="toolbar">
+            <h2>Administrator accounts</h2>
+            <button class="button primary" type="button" id="add-admin-btn">Add Admin</button>
+          </div>
+          <p id="admin-accounts-message" class="notice" hidden></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Administrator</th>
+                  <th>Email</th>
+                  <th>Role &amp; Department</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-table-body">
+                <tr><td colspan="6" class="empty-state">Loading administrator accounts...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <dialog id="admin-dialog" class="student-dialog"></dialog>
+        </section>
         <?php elseif ($section === 'students'): ?>
         <section class="panel" id="student-management"
                  data-csrf="<?= h($_SESSION['admin_csrf_token']) ?>"
@@ -704,6 +800,7 @@ function h($value): string
             <div class="toolbar">
               <?php if ($canManageStudents): ?><button class="button primary" type="button" id="add-student-button">+ Add Student</button><?php endif; ?>
               <?php if ($canReadAudit): ?><button class="button" type="button" id="student-audit-toggle">Audit Logs</button><?php endif; ?>
+              <button class="button" type="button" id="registry-toggle-btn">Enrolled Registry</button>
             </div>
           </div>
           <form class="filter-form" id="student-search">
@@ -728,8 +825,8 @@ function h($value): string
           <p id="student-management-message" role="status" aria-live="polite"></p>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Student ID</th><th>Name</th><th>Program</th><th>Year Level</th><th>Campus</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody id="student-table-body"><tr><td colspan="7" class="empty-state">Loading students…</td></tr></tbody>
+              <thead><tr><th>Student ID</th><th>Name</th><th>Program</th><th>Year Level</th><th>Campus</th><th>Status</th><th>Academic Status</th><th>Actions</th></tr></thead>
+              <tbody id="student-table-body"><tr><td colspan="8" class="empty-state">Loading students…</td></tr></tbody>
             </table>
           </div>
           <section id="student-audit-panel" hidden aria-label="Student audit logs">
@@ -739,6 +836,26 @@ function h($value): string
                 <thead><tr><th>Date</th><th>Administrator</th><th>Student ID</th><th>Action</th><th>Old information</th><th>New information</th></tr></thead>
                 <tbody id="student-audit-body"></tbody>
               </table>
+            </div>
+                    </section>
+          <section id="student-registry-panel" hidden aria-label="Enrolled Student Registry" style="margin-top:20px;border-top:1px solid #e2e8f0;padding-top:16px;">
+            <h2>Enrolled Student Registry</h2>
+            <p class="panel-caption">Pre-registration validation registry for incoming and continuing students.</p>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+              <span id="registry-status-display" style="font-weight:600;">Status: Loading…</span>
+              <button class="button small" type="button" id="registry-toggle-setting-btn">Toggle Requirement</button>
+            </div>
+            <div style="background:#f8fafc;padding:16px;border-radius:8px;border:1px solid #e2e8f0;max-width:600px;">
+              <h3>Import Registry CSV</h3>
+              <p class="panel-caption">CSV header format: <code>student_number,last_name,program,year_level</code></p>
+              <form id="registry-import-form" style="display:flex;flex-direction:column;gap:10px;">
+                <textarea name="csv_content" rows="4" placeholder="student_number,last_name,program,year_level&#10;8240099,Santos,BSIT,1st Year" style="font-family:monospace;font-size:13px;padding:8px;width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:4px;"></textarea>
+                <div style="display:flex;gap:10px;align-items:center;">
+                  <input type="file" name="csv_file" accept=".csv" style="flex:1;">
+                  <button type="submit" class="button primary">Upload &amp; Import</button>
+                </div>
+              </form>
+              <div id="registry-import-msg" style="margin-top:10px;" role="status"></div>
             </div>
           </section>
         </section>
@@ -770,6 +887,7 @@ function h($value): string
                 </tbody>
               </table>
             <?php elseif ($section === 'clearances'): ?>
+              <!-- Legacy section: Clearances. Retained for historical records; hidden from primary navigation. -->
               <table>
                 <thead><tr><th>Student</th><th>Program</th><th>Office</th><th>Requirement</th><th>Status</th><th>Reviewed</th><th>Notes</th></tr></thead>
                 <tbody>
@@ -785,6 +903,7 @@ function h($value): string
                 </tbody>
               </table>
             <?php else: ?>
+              <!-- Legacy section: Payments. Retained for historical records; hidden from primary navigation. -->
               <table>
                 <thead><tr><th>Student</th><th>Program</th><th>Receipt</th><th>Amount</th><th>Status</th><th>Method</th><th>Paid at</th><th>Notes</th></tr></thead>
                 <tbody>
@@ -808,10 +927,14 @@ function h($value): string
     </main>
   </div>
 </div>
-<?php if ($section === 'eligibility-records'): ?>
+<?php if ($section === 'eligibility'): ?>
+  <script src="../js/admin-eligibility-settings.js" defer></script>
+<?php elseif ($section === 'eligibility-records'): ?>
   <script src="../js/admin-eligibility.js" defer></script>
 <?php elseif ($section === 'students' && $canRead): ?>
   <script src="../js/admin-students.js" defer></script>
+<?php elseif ($section === 'admins' && $canRead): ?>
+  <script src="../js/admin-accounts.js" defer></script>
 <?php endif; ?>
 </body>
 </html>

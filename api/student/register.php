@@ -34,7 +34,7 @@ if (!preg_match('/\A824[0-9]{4}\z/', $studentNumber)) {
 }
 if (
     $firstName === '' || strlen($firstName) > 100 ||
-    $middleName === '' || strlen($middleName) > 100 ||
+    strlen($middleName) > 100 ||
     $lastName === '' || strlen($lastName) > 100 ||
     !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190 ||
     !preg_match('/\A[\d\s()+-]{7,32}\z/', $phone) ||
@@ -42,18 +42,24 @@ if (
 ) {
     student_json_response(['success' => false, 'message' => 'Complete all required student details with valid values.'], 400);
 }
-if (!is_string($yearLevel) || !in_array($yearLevel, $yearLevels, true)) {
+$canonicalYearLevel = is_string($yearLevel) ? normalize_year_level($yearLevel) : null;
+$yearLevel = $canonicalYearLevel;
+if (!$canonicalYearLevel) {
     student_json_response(['success' => false, 'message' => 'Please select a valid year level.'], 400);
 }
 if (
     !is_string($password) || strlen($password) < 8 || strlen($password) > 72 ||
-    !is_string($confirmPassword) || !hash_equals($password, $confirmPassword)
+    !preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)
 ) {
     student_json_response([
         'success' => false,
-        'message' => !is_string($password) || strlen($password) < 8 || strlen($password) > 72
-            ? 'Enter a password of 8 to 72 characters.'
-            : 'Passwords do not match.',
+        'message' => 'Password must be between 8 and 72 characters and contain at least one letter and one number.',
+    ], 400);
+}
+if (!is_string($confirmPassword) || !hash_equals($password, $confirmPassword)) {
+    student_json_response([
+        'success' => false,
+        'message' => 'Passwords do not match.',
     ], 400);
 }
 
@@ -69,6 +75,27 @@ try {
         ], 429);
     }
     auth_rate_limit_record_attempt($database, 'student-register', $email);
+
+    $settingStmt = $database->prepare('SELECT setting_value FROM system_settings WHERE setting_key = \'require_registry_match\' LIMIT 1');
+    $settingStmt->execute();
+    $rawSetting = $settingStmt->fetchColumn();
+    $requireRegistryMatch = false;
+    if ($rawSetting !== false) {
+        $decoded = json_decode((string)$rawSetting, true);
+        $requireRegistryMatch = ($decoded === true || $decoded === 1 || $decoded === '1' || $rawSetting === 'true' || $rawSetting === '1');
+    }
+
+    if ($requireRegistryMatch) {
+        $regQuery = $database->prepare('SELECT last_name FROM enrolled_student_registry WHERE student_number = ? LIMIT 1');
+        $regQuery->execute([$studentNumber]);
+        $regLastName = $regQuery->fetchColumn();
+        if ($regLastName === false || strcasecmp(trim((string)$regLastName), trim($lastName)) !== 0) {
+            student_json_response([
+                'success' => false,
+                'message' => 'Student ID and last name do not match the official enrolled student registry. Please contact the registrar.',
+            ], 422);
+        }
+    }
 
     $campusQuery = $database->prepare(
         'SELECT campus_id FROM campuses WHERE campus_name = ? LIMIT 1'
@@ -117,7 +144,7 @@ try {
     $studentQuery->execute([
         $userId,
         $studentNumber,
-        $middleName,
+        $middleName === '' ? null : $middleName,
         $program,
         $yearLevel,
         (int)$campusId,

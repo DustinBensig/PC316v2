@@ -597,25 +597,42 @@ PAGES['book-appointment'] = {
       resultBox.setAttribute('aria-busy', 'false');
       profile = profile || currentUser() || { name: 'Student', sid: '' };
       const checks = eligibility.checks || [];
+      const today = new Date().toISOString().slice(0, 10);
+      let weekWindowMessage = '';
+      if (schedule) {
+        if (today < schedule.start_date) {
+          weekWindowMessage = `<p class="notice info">Booking opens on ${escapeHtml(formatDate(schedule.start_date))}.</p>`;
+        } else if (today > schedule.end_date) {
+          weekWindowMessage = `<p class="notice alert">The booking window for your year level has closed (closed on ${escapeHtml(formatDate(schedule.end_date))}).</p>`;
+        }
+      }
       resultBox.innerHTML = `<h2>${eligibility.eligible ? 'You are qualified to book' : 'Enrollment Appointment Not Available'}</h2>
         <p>Name: ${escapeHtml(profile.name)} · Student ID: ${escapeHtml(profile.sid)}</p>
         <p>Program: ${escapeHtml(profile.program || 'Not on file')} · Campus: ${escapeHtml(profile.campus || 'Not on file')}</p>
         <p>Year level: ${escapeHtml(profile.yearLevel || profile.year || 'Not on file')} · Student status: ${escapeHtml(profile.status || 'Not on file')}</p>
         <p>Assigned Enrollment Week: ${escapeHtml(profile.assignedEnrollmentWeek || 'Not available')}
           ${schedule ? ` · ${escapeHtml(formatDate(schedule.start_date))} – ${escapeHtml(formatDate(schedule.end_date))}` : ''}</p>
+        ${weekWindowMessage}
         ${eligibility.eligible ? '<p>All enrollment requirements are currently satisfied.</p>' : '<p>You are currently not qualified for enrollment because:</p>'}
         <ul>${checks.map(check => `<li>${check.passed ? '✓' : '✗'} ${escapeHtml(check.label)}
           ${(check.reasons || []).length ? `<ul>${check.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
         ${eligibility.eligible ? '' : '<p>Please resolve the requirements above before booking an enrollment appointment.</p>'}
         ${eligibility.eligible && !schedule ? '<p>No active enrollment schedule is available for your year level. Please contact the registrar.</p>' : ''}`;
-      slotPicker.hidden = !eligibility.eligible || !schedule;
+      slotPicker.hidden = !eligibility.eligible || !schedule || (schedule && (today < schedule.start_date || today > schedule.end_date));
     };
 
     const loadSlots = async () => {
       const response = await studentFetch('api/student/slots.php', { credentials: 'same-origin' });
       if (response.status === 401) return redirectToLogin();
       const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || 'Available slots could not be loaded.');
+      if (!response.ok || !result.success) {
+        if (result.message) {
+          resultBox.insertAdjacentHTML('beforeend', `<p class="notice alert">${escapeHtml(result.message)}</p>`);
+          slotPicker.hidden = true;
+          return;
+        }
+        throw new Error(result.message || 'Available slots could not be loaded.');
+      }
       if (!result.eligible) {
         renderEligibility(result.eligibility, result.student, result.schedule);
         return;
@@ -1013,27 +1030,241 @@ PAGES['reschedule-confirmation'] = {
   }
 };
 
-/* 11. Enrollment record */
+/* 11. Enrollment record & eligibility status */
 PAGES.enrollment = {
   render() {
     const user = currentUser();
     return withSidebar(`
-      <h1>Enrollment &amp; Study Load</h1>
-      <div class="card">
-        <h2>Student Record</h2>
-        ${detailsList({
-          'Student ID': user.sid || 'Not set',
-          'Name': user.name || 'Not set',
-          'Program': user.program || 'Not set',
-          'Year level': user.year || 'Not set',
-          'Student status': user.status || 'Not set',
-          'Campus': user.campus || 'Not set',
-          'Assigned Enrollment Week': user.assignedEnrollmentWeek || 'Not assigned'
-        })}
-        <p class="muted">Course, fee, and registration details are not available through the current student API.</p>
-      </div>`);
+      <div class="enrollment-header" style="margin-bottom: 24px;">
+        <h1 style="font-size: 26px; font-weight: 700; margin-bottom: 6px;">Enrollment &amp; Eligibility Status</h1>
+        <p class="muted" style="font-size: 14px;">Review your current academic standing, prerequisite clearances, and enrollment booking qualification.</p>
+      </div>
+
+      <div id="enrollmentEligibilityBanner" class="card" style="margin-bottom: 24px; padding: 20px; transition: all 0.2s ease;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="font-size: 24px; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: #e0f2fe; color: #0284c7;">⌛</div>
+          <div>
+            <h2 style="font-size: 18px; margin: 0 0 4px; font-weight: 600;">Checking enrollment eligibility...</h2>
+            <p class="muted" style="margin: 0; font-size: 13px;">Verifying academic records, financials, documents, holds, and schedule window...</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px;">
+        <div class="card" style="padding: 22px;">
+          <h2 style="font-size: 17px; font-weight: 600; margin-bottom: 14px; border-bottom: 1px solid var(--ln); padding-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+            <span>Student Academic Record</span>
+            <span id="enrollmentStatusBadge" class="badge" style="font-size: 11px; padding: 4px 10px; border-radius: 20px; background: #e2e8f0; color: #475569;">${escapeHtml(user.status || 'Active')}</span>
+          </h2>
+          <div id="enrollmentStudentDetails">
+            ${detailsList({
+              'Student ID': user.sid || 'Not set',
+              'Full Name': user.name || 'Not set',
+              'Program': user.program || 'Not set',
+              'Year Level': user.year || 'Not set',
+              'Academic Standing': user.academicStatus || user.status || 'Regular',
+              'Campus': user.campus || 'CTU Daanbantayan Campus',
+              'Assigned Week': user.assignedEnrollmentWeek || 'Not assigned'
+            })}
+          </div>
+        </div>
+
+        <div class="card" style="padding: 22px;">
+          <h2 style="font-size: 17px; font-weight: 600; margin-bottom: 14px; border-bottom: 1px solid var(--ln); padding-bottom: 10px;">
+            Schedule &amp; Next Steps
+          </h2>
+          <div id="enrollmentScheduleSummary">
+            <p class="muted" style="font-size: 14px;">Loading schedule and booking window information...</p>
+          </div>
+          <div id="enrollmentActionContainer" style="margin-top: 18px;" hidden>
+            <a href="book-appointment.html" class="btn" style="display: block; text-align: center; text-decoration: none; padding: 12px 18px;">
+              Proceed to Book Appointment &rarr;
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 22px;">
+        <h2 style="font-size: 17px; font-weight: 600; margin-bottom: 6px;">Prerequisite Checks Breakdown</h2>
+        <p class="muted" style="font-size: 13px; margin-bottom: 18px;">All prerequisite checks must be satisfied before booking an in-person enrollment appointment.</p>
+        <div id="enrollmentChecksList">
+          <p class="muted">Loading verification checks...</p>
+        </div>
+      </div>
+    `);
   },
-  setup() {}
+
+  setup() {
+    const banner = select('#enrollmentEligibilityBanner');
+    const studentDetails = select('#enrollmentStudentDetails');
+    const scheduleSummary = select('#enrollmentScheduleSummary');
+    const actionContainer = select('#enrollmentActionContainer');
+    const checksList = select('#enrollmentChecksList');
+    const statusBadge = select('#enrollmentStatusBadge');
+
+    const renderData = (eligibility, student, schedule) => {
+      const isEligible = Boolean(eligibility && eligibility.eligible);
+      const checks = (eligibility && eligibility.checks) || [];
+      const user = currentUser();
+      const today = new Date().toISOString().slice(0, 10);
+
+      // 1. Render Overall Banner
+      if (isEligible) {
+        banner.style.border = '1px solid #86efac';
+        banner.style.background = '#f0fdf4';
+        banner.innerHTML = `
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            <div style="font-size: 22px; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: #dcfce7; color: #16a34a; flex-shrink: 0;">✓</div>
+            <div style="flex: 1;">
+              <h2 style="font-size: 18px; margin: 0 0 4px; font-weight: 600; color: #166534;">Fully Qualified for Enrollment Appointment Booking</h2>
+              <p style="margin: 0 0 6px; font-size: 14px; color: #15803d;">All academic records, financial accounts, holds, and document verification checks are satisfied. You may proceed to select an appointment slot.</p>
+            </div>
+          </div>
+        `;
+        if (actionContainer) actionContainer.hidden = false;
+      } else {
+        banner.style.border = '1px solid #fecaca';
+        banner.style.background = '#fef2f2';
+        const reasons = (eligibility && eligibility.reasons && eligibility.reasons.length)
+          ? `<ul style="margin: 8px 0 0 18px; padding: 0; font-size: 13px; color: #b91c1c;">${eligibility.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`
+          : '';
+        banner.innerHTML = `
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            <div style="font-size: 22px; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: #fee2e2; color: #dc2626; flex-shrink: 0;">✕</div>
+            <div style="flex: 1;">
+              <h2 style="font-size: 18px; margin: 0 0 4px; font-weight: 600; color: #991b1b;">Enrollment Blocked — Review Requirements Below</h2>
+              <p style="margin: 0; font-size: 14px; color: #b91c1c;">One or more prerequisites are currently blocking your appointment. Please review the itemized checks below and resolve any deficiencies before booking.</p>
+              ${reasons}
+            </div>
+          </div>
+        `;
+        if (actionContainer) actionContainer.hidden = true;
+      }
+
+      // 2. Render Student Academic Details
+      if (student) {
+        if (statusBadge) {
+          const actStatus = student.academicStatus || student.status || 'Active';
+          statusBadge.textContent = actStatus;
+          statusBadge.style.background = isEligible ? '#dcfce7' : '#fee2e2';
+          statusBadge.style.color = isEligible ? '#166534' : '#991b1b';
+        }
+        if (studentDetails) {
+          studentDetails.innerHTML = detailsList({
+            'Student ID': student.sid || user.sid || 'Not set',
+            'Full Name': student.name || user.name || 'Not set',
+            'Program': student.program || user.program || 'Not set',
+            'Year Level': student.yearLevel || student.year || user.year || 'Not set',
+            'Academic Standing': student.academicStatus || 'Regular',
+            'Campus': student.campus || user.campus || 'CTU Daanbantayan Campus',
+            'Assigned Week': student.assignedEnrollmentWeek || user.assignedEnrollmentWeek || 'Not assigned'
+          });
+        }
+      }
+
+      // 3. Render Schedule Summary
+      if (scheduleSummary) {
+        if (!schedule) {
+          scheduleSummary.innerHTML = `
+            <div style="padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; color: #92400e; font-size: 13px;">
+              <strong>No Active Schedule:</strong> An enrollment schedule is not currently published for your year level. Please consult the registrar.
+            </div>
+          `;
+        } else {
+          let windowStatus = '';
+          if (today < schedule.start_date) {
+            windowStatus = `<span style="color: #0284c7; font-weight: 600;">Upcoming</span> (Opens in ${Math.ceil((new Date(schedule.start_date) - new Date(today)) / (1000 * 60 * 60 * 24))} days)`;
+          } else if (today > schedule.end_date) {
+            windowStatus = `<span style="color: #dc2626; font-weight: 600;">Closed</span> (Ended on ${formatDate(schedule.end_date)})`;
+          } else {
+            windowStatus = `<span style="color: #16a34a; font-weight: 600;">Open Now</span> (Active enrollment week)`;
+          }
+
+          scheduleSummary.innerHTML = `
+            <div style="display: grid; gap: 8px; font-size: 14px;">
+              <div style="display: flex; justify-content: space-between;"><span class="muted">Year Level:</span><strong>${escapeHtml(schedule.year_level || student.yearLevel || '')}</strong></div>
+              <div style="display: flex; justify-content: space-between;"><span class="muted">Week Number:</span><strong>Week ${escapeHtml(schedule.week_number || '')}</strong></div>
+              <div style="display: flex; justify-content: space-between;"><span class="muted">Enrollment Week:</span><strong>${formatDate(schedule.start_date)} &ndash; ${formatDate(schedule.end_date)}</strong></div>
+              <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--ln); padding-top: 6px;"><span class="muted">Booking Window:</span><strong>${windowStatus}</strong></div>
+            </div>
+          `;
+        }
+      }
+
+      // 4. Render Prerequisite Checks Breakdown
+      if (checksList) {
+        if (!checks.length) {
+          checksList.innerHTML = '<p class="muted">No verification checks were returned.</p>';
+        } else {
+          checksList.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              ${checks.map(check => {
+                const passed = Boolean(check.passed);
+                const borderCol = passed ? '#bbf7d0' : '#fecaca';
+                const bgCol = passed ? '#f8fafc' : '#fff5f5';
+                const badgeBg = passed ? '#dcfce7' : '#fee2e2';
+                const badgeTxt = passed ? '#166534' : '#991b1b';
+                const icon = passed ? '✓' : '✕';
+                const badgeLabel = passed ? 'Passed' : 'Action Required';
+
+                const detailsHtml = (check.details && check.details.length)
+                  ? `<div style="margin-top: 6px; font-size: 12px; color: var(--mu); line-height: 1.5;">${check.details.map(d => `<div>• ${escapeHtml(d)}</div>`).join('')}</div>`
+                  : '';
+                const reasonsHtml = (!passed && check.reasons && check.reasons.length)
+                  ? `<div style="margin-top: 6px; padding: 6px 10px; background: #fee2e2; border-radius: 6px; font-size: 12px; color: #991b1b; line-height: 1.4;">${check.reasons.map(r => `<div>⚠ ${escapeHtml(r)}</div>`).join('')}</div>`
+                  : '';
+
+                return `
+                  <div style="border: 1px solid ${borderCol}; background: ${bgCol}; border-radius: 10px; padding: 14px 16px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                      <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: 700; color: ${badgeTxt}; font-size: 16px;">${icon}</span>
+                        <strong style="font-size: 15px; color: var(--tx);">${escapeHtml(check.label)}</strong>
+                      </div>
+                      <span style="background: ${badgeBg}; color: ${badgeTxt}; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 12px;">
+                        ${badgeLabel}
+                      </span>
+                    </div>
+                    ${detailsHtml}
+                    ${reasonsHtml}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        }
+      }
+    };
+
+    studentFetch('api/student/eligibility.php', { credentials: 'same-origin' })
+      .then(async res => {
+        if (res.status === 401) {
+          clearStudentSession();
+          goTo('login');
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Could not load enrollment records.');
+        }
+        renderData(data.eligibility, data.student, data.schedule);
+      })
+      .catch(err => {
+        if (banner) {
+          banner.style.background = '#fef2f2';
+          banner.style.border = '1px solid #fecaca';
+          banner.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="font-size: 22px; color: #dc2626;">⚠</div>
+              <div>
+                <h2 style="font-size: 17px; margin: 0 0 4px; color: #991b1b;">Unable to Check Eligibility</h2>
+                <p style="margin: 0; font-size: 13px; color: #b91c1c;">${escapeHtml(err.message || 'The server could not be reached. Please reload or try again later.')}</p>
+              </div>
+            </div>
+          `;
+        }
+      });
+  }
 };
 
 /* 12. Profile */
@@ -1242,7 +1473,9 @@ PAGES.settings = {
         const confirmPass = popup.querySelector('#confirmPassword').value;
 
         let valid = true;
-        if (newPass.length < 8) valid = showError('newPassword', 'Use at least 8 characters.');
+        if (newPass.length < 8 || newPass.length > 72 || !/[A-Za-z]/.test(newPass) || !/[0-9]/.test(newPass)) {
+          valid = showError('newPassword', 'Password must be 8–72 characters with at least one letter and one number.');
+        }
         if (confirmPass !== newPass) valid = showError('confirmPassword', 'Passwords do not match.');
         if (!valid) return;
 

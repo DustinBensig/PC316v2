@@ -95,12 +95,19 @@ try {
     $currentDateQuery = $database->prepare('SELECT CURRENT_DATE');
     $currentDateQuery->execute();
     $currentDate = (string)$currentDateQuery->fetchColumn();
-    if ($currentDate < $schedule['start_date'] || $currentDate > $schedule['end_date']) {
+    if ($currentDate < $schedule['start_date']) {
         $database->rollBack();
         student_json_response([
             'success' => false,
-            'message' => 'You can only book an appointment during your assigned enrollment week.',
-        ], 403);
+            'message' => 'Booking has not opened yet for your year level (opens on ' . $schedule['start_date'] . ').',
+        ], 422);
+    }
+    if ($currentDate > $schedule['end_date']) {
+        $database->rollBack();
+        student_json_response([
+            'success' => false,
+            'message' => 'The booking window for your year level has closed (closed on ' . $schedule['end_date'] . ').',
+        ], 422);
     }
     if ($date < $currentDate) {
         $database->rollBack();
@@ -108,7 +115,10 @@ try {
     }
     if ($date < $schedule['start_date'] || $date > $schedule['end_date']) {
         $database->rollBack();
-        student_json_response(['success' => false, 'message' => 'This date is outside your assigned enrollment week.'], 403);
+        student_json_response([
+            'success' => false,
+            'message' => 'The selected appointment date falls outside your assigned enrollment week (' . $schedule['start_date'] . ' to ' . $schedule['end_date'] . ').',
+        ], 422);
     }
     if ($date === $originalDate && $time . ':00' === $originalTime) {
         $database->rollBack();
@@ -244,15 +254,21 @@ try {
         'week_start' => $schedule['start_date'],
         'week_end' => $schedule['end_date'],
     ];
-    try {
-        $emailSent = student_send_appointment_email($profile, $updatedAppointment, 'rescheduled');
-    } catch (Throwable $error) {
-        error_log('Enrollment appointment was rescheduled but notification email failed: ' . $error->getMessage());
-        $emailSent = false;
+    $emailSent = false;
+    if (student_mail_is_configured()) {
+        try {
+            $emailSent = student_send_appointment_email($profile, $updatedAppointment, 'rescheduled');
+            $message = $emailSent
+                ? 'Enrollment appointment rescheduled. A confirmation email was sent.'
+                : 'Enrollment appointment rescheduled, but the confirmation email could not be sent. Please contact the registrar.';
+        } catch (Throwable $error) {
+            error_log('Enrollment appointment was rescheduled but notification email failed: ' . $error->getMessage());
+            $emailSent = false;
+            $message = 'Enrollment appointment rescheduled, but the confirmation email could not be sent. Please contact the registrar.';
+        }
+    } else {
+        $message = 'Enrollment appointment rescheduled. Email notifications are not enabled.';
     }
-    $message = $emailSent
-        ? 'Enrollment appointment rescheduled. A confirmation email was sent.'
-        : 'Enrollment appointment rescheduled, but the confirmation email could not be sent. Please contact the registrar.';
     try {
         $notificationUpdate = $database->prepare(
             'UPDATE notifications

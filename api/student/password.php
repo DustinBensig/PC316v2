@@ -11,9 +11,10 @@ $currentPassword = $request['currentPassword'] ?? null;
 $newPassword = $request['newPassword'] ?? null;
 if (
     !is_string($currentPassword) || strlen($currentPassword) > 72 ||
-    !is_string($newPassword) || strlen($newPassword) < 8 || strlen($newPassword) > 72
+    !is_string($newPassword) || strlen($newPassword) < 8 || strlen($newPassword) > 72 ||
+    !preg_match('/[A-Za-z]/', $newPassword) || !preg_match('/[0-9]/', $newPassword)
 ) {
-    student_json_response(['success' => false, 'message' => 'Enter your current password and a new password of 8 to 72 characters.'], 400);
+    student_json_response(['success' => false, 'message' => 'Enter your current password and a new password between 8 and 72 characters containing at least one letter and one number.'], 400);
 }
 
 try {

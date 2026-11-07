@@ -31,6 +31,7 @@ function admin_student_summary(array $student): array
         'yearLevel' => $student['year_level'] ?? '',
         'campus' => $student['campus_name'],
         'studentStatus' => $student['student_status'],
+        'academicStatus' => $student['academic_status'] ?? 'Regular',
         'assignedEnrollmentWeek' => $assignment ? 'Week ' . $assignment['week_number'] : '',
         'createdAt' => $student['created_at'] ?? '',
         'departmentId' => (int)$student['department_id'],
@@ -78,7 +79,7 @@ function admin_student_input(array $request): array
     }
     if (
         $firstName === '' || strlen($firstName) > 100 ||
-        $middleName === '' || strlen($middleName) > 100 ||
+        strlen($middleName) > 100 ||
         $lastName === '' || strlen($lastName) > 100 ||
         !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190 ||
         !preg_match('/\A[\d\s()+-]{7,32}\z/', $phone) ||
@@ -86,11 +87,18 @@ function admin_student_input(array $request): array
     ) {
         admin_json_response(['success' => false, 'message' => 'Complete all required student details with valid values.'], 400);
     }
-    if (!is_string($yearLevel) || !in_array($yearLevel, ['1st Year', '2nd Year', '3rd Year', '4th Year'], true)) {
+    $canonicalYear = is_string($yearLevel) ? normalize_year_level($yearLevel) : null;
+    $yearLevel = $canonicalYear;
+    if (!$canonicalYear) {
         admin_json_response(['success' => false, 'message' => 'Please select a valid year level.'], 400);
     }
     if (!is_string($status) || !in_array($status, ['Active', 'Inactive'], true)) {
         admin_json_response(['success' => false, 'message' => 'Select a valid student status.'], 400);
+    }
+    $academicStatus = $request['academicStatus'] ?? 'Regular';
+    $validStatuses = ['Regular', 'Irregular', 'Returnee', 'Transferee', 'Shiftee', 'New Student'];
+    if (!is_string($academicStatus) || !in_array($academicStatus, $validStatuses, true)) {
+        $academicStatus = 'Regular';
     }
     if (
         (array_key_exists('campus', $request) && $request['campus'] !== 'Daanbantayan Campus') ||
@@ -107,13 +115,14 @@ function admin_student_input(array $request): array
     return [
         'student_number' => $studentNumber,
         'first_name' => $firstName,
-        'middle_name' => $middleName,
+        'middle_name' => $middleName === '' ? null : $middleName,
         'last_name' => $lastName,
         'email' => $email,
         'phone' => $phone,
         'program' => $program,
         'year_level' => $yearLevel,
         'student_status' => $status,
+        'academic_status' => $academicStatus,
     ];
 }
 
@@ -161,7 +170,7 @@ try {
         $studentId = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
         $assignedOnly = !admin_has_permission($database, $admin, 'students.read');
         $sql = 'SELECT s.id, s.student_number, s.middle_name, s.program, s.year_level,
-                       s.student_status, s.department_id, s.created_at,
+                       s.student_status, s.academic_status, s.department_id, s.created_at,
                        u.first_name, u.last_name, u.email, u.phone,
                        campuses.campus_name
                 FROM students AS s
@@ -292,11 +301,12 @@ try {
         $confirmPassword = $request['confirmPassword'] ?? null;
         if (
             !is_string($password) || strlen($password) < 8 || strlen($password) > 72 ||
+            !preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password) ||
             !is_string($confirmPassword) || !hash_equals($password, $confirmPassword)
         ) {
             admin_json_response([
                 'success' => false,
-                'message' => 'Enter a password of 8 to 72 characters and confirm it.',
+                'message' => 'Enter a password between 8 and 72 characters containing at least one letter and one number, and confirm it.',
             ], 400);
         }
         $campusQuery = $database->prepare('SELECT campus_id FROM campuses WHERE campus_name = ? LIMIT 1');
@@ -336,7 +346,7 @@ try {
             (int)$campusId,
             $student['student_status'],
             (int)$departmentId,
-            'active',
+            $student['academic_status'],
         ]);
         $studentId = (int)$database->lastInsertId();
         $newData = $student;
@@ -354,7 +364,7 @@ try {
     $database->beginTransaction();
     $select = $database->prepare(
         'SELECT s.id, s.student_number, s.middle_name, s.program, s.year_level,
-                s.student_status, s.department_id, s.created_at,
+                s.student_status, s.academic_status, s.department_id, s.created_at,
                 u.id AS user_id, u.first_name, u.last_name, u.email, u.phone,
                 campuses.campus_name
          FROM students AS s
@@ -396,7 +406,7 @@ try {
     $studentUpdate = $database->prepare(
         'UPDATE students
          SET student_number = ?, middle_name = ?, program = ?, year_level = ?,
-             student_status = ?, campus_id = (
+             student_status = ?, academic_status = ?, campus_id = (
                SELECT campus_id FROM campuses WHERE campus_name = \'Daanbantayan Campus\' LIMIT 1
              )
          WHERE id = ?'
@@ -407,6 +417,7 @@ try {
         $student['program'],
         $student['year_level'],
         $student['student_status'],
+        $student['academic_status'],
         (int)$id,
     ]);
     $newData = $student;

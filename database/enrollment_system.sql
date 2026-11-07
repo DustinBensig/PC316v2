@@ -14,27 +14,27 @@ VALUES
   ('enrollment-test-8240004@example.com', '$2y$10$IKj1wunZK8KUwJrRQSIYV.ytyOTSEkZFgaPfghz47hyIZj/SQJPUu', 'Test', 'ActiveHold', 'student');
 
 INSERT INTO students (id, user_id, student_number, program, year_level, department_id, academic_status)
-SELECT 8240000, users.id, '8240000', 'BSIT', 'First Year', departments.id, 'active'
+SELECT 8240000, users.id, '8240000', 'BSIT', '1st Year', departments.id, 'Regular'
 FROM users CROSS JOIN departments
 WHERE users.email = 'enrollment-test-8240000@example.com' AND departments.department_code = 'CodeTech';
 
 INSERT INTO students (id, user_id, student_number, program, year_level, department_id, academic_status)
-SELECT 8240001, users.id, '8240001', 'BSIT', 'First Year', departments.id, 'active'
+SELECT 8240001, users.id, '8240001', 'BSIT', '1st Year', departments.id, 'Regular'
 FROM users CROSS JOIN departments
 WHERE users.email = 'enrollment-test-8240001@example.com' AND departments.department_code = 'CodeTech';
 
 INSERT INTO students (id, user_id, student_number, program, year_level, department_id, academic_status)
-SELECT 8240002, users.id, '8240002', 'BSIT', 'Second Year', departments.id, 'active'
+SELECT 8240002, users.id, '8240002', 'BSIT', '2nd Year', departments.id, 'Regular'
 FROM users CROSS JOIN departments
 WHERE users.email = 'enrollment-test-8240002@example.com' AND departments.department_code = 'CodeTech';
 
 INSERT INTO students (id, user_id, student_number, program, year_level, department_id, academic_status)
-SELECT 8240003, users.id, '8240003', 'BSIT', 'Third Year', departments.id, 'active'
+SELECT 8240003, users.id, '8240003', 'BSIT', '3rd Year', departments.id, 'Regular'
 FROM users CROSS JOIN departments
 WHERE users.email = 'enrollment-test-8240003@example.com' AND departments.department_code = 'CodeTech';
 
 INSERT INTO students (id, user_id, student_number, program, year_level, department_id, academic_status)
-SELECT 8240004, users.id, '8240004', 'BSIT', 'Fourth Year', departments.id, 'active'
+SELECT 8240004, users.id, '8240004', 'BSIT', '4th Year', departments.id, 'Regular'
 FROM users CROSS JOIN departments
 WHERE users.email = 'enrollment-test-8240004@example.com' AND departments.department_code = 'CodeTech';
 

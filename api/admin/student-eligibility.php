@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/../enrollment-booking.php';
 require_once __DIR__ . '/../enrollment-eligibility.php';
 start_admin_session();
 
@@ -37,13 +38,16 @@ try {
         admin_json_response(['success' => false, 'message' => 'Enter a seven-digit student number beginning with 824.'], 400);
     }
 
-    $yearLevel = $request['yearLevel'] ?? null;
-    $yearLevels = ['First Year', 'Second Year', 'Third Year', 'Fourth Year'];
-    if ($yearLevel === '') {
+    $yearLevelInput = array_key_exists('yearLevel', $request) ? $request['yearLevel'] : null;
+    $yearLevelExplicit = array_key_exists('yearLevel', $request);
+    $yearLevel = null;
+    if ($yearLevelInput === '') {
         $yearLevel = null;
-    }
-    if ($yearLevel !== null && (!is_string($yearLevel) || !in_array($yearLevel, $yearLevels, true))) {
-        admin_json_response(['success' => false, 'message' => 'Select a supported year level or leave it unset.'], 400);
+    } elseif ($yearLevelInput !== null) {
+        if (!is_string($yearLevelInput) || normalize_year_level($yearLevelInput) === null) {
+            admin_json_response(['success' => false, 'message' => 'Select a supported year level or leave it unset.'], 400);
+        }
+        $yearLevel = normalize_year_level($yearLevelInput);
     }
 
     $academicStatus = $request['academicStatus'] ?? null;
@@ -406,7 +410,7 @@ try {
 function admin_student_eligibility_record(PDO $database, string $studentNumber): ?array
 {
     $studentQuery = $database->prepare(
-        'SELECT s.id AS student_id, s.student_number, s.program, s.year_level,
+        'SELECT s.id AS student_id, s.student_number, s.middle_name, s.program, s.year_level,
                 s.academic_status, u.first_name, u.last_name, u.email, u.is_active
          FROM students AS s
          INNER JOIN users AS u ON u.id = s.user_id
@@ -496,7 +500,11 @@ function admin_student_eligibility_record(PDO $database, string $studentNumber):
     return [
         'student' => [
             'studentNumber' => $student['student_number'],
-            'name' => trim($student['first_name'] . ' ' . $student['last_name']),
+            'name' => trim(implode(' ', array_filter([
+                $student['first_name'],
+                $student['middle_name'] ?? '',
+                $student['last_name'],
+            ], static fn($part): bool => trim((string)$part) !== ''))),
             'email' => $student['email'],
             'program' => $student['program'],
             'yearLevel' => $student['year_level'],

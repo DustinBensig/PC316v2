@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/enrollment-booking.php';
+
 function enrollment_eligibility(PDO $database, int $studentId): array
 {
     $rulesQuery = $database->prepare(

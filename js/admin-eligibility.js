@@ -10,6 +10,7 @@
   const message = document.querySelector("#eligibility-manager-message");
   const csrfToken = root.dataset.csrf;
   const apiUrl = "../api/admin/student-eligibility.php";
+  let deletedItems = { subjects: [], financial: [], holds: [], requirements: [] };
   const academicStatuses = ["applicant", "active", "inactive", "graduated", "dropped", "suspended", "enrolling", "enrolled"];
   const gradeStatuses = ["complete", "missing", "incomplete", "deficient", "failed", "pending"];
   const paymentStatuses = ["paid", "unpaid", "pending"];
@@ -25,6 +26,16 @@
       '"': "&quot;",
       "'": "&#39;"
     }[character]));
+  }
+
+  function canonicalYearLevel(y) {
+    if (!y) return '';
+    const s = String(y).toLowerCase().trim();
+    if (s.startsWith('1') || s.startsWith('first')) return '1st Year';
+    if (s.startsWith('2') || s.startsWith('second')) return '2nd Year';
+    if (s.startsWith('3') || s.startsWith('third')) return '3rd Year';
+    if (s.startsWith('4') || s.startsWith('fourth')) return '4th Year';
+    return y;
   }
 
   function options(values, selected, labels = {}) {
@@ -83,6 +94,7 @@
   }
 
   function renderRecord(record) {
+    deletedItems = { subjects: [], financial: [], holds: [], requirements: [] };
     const student = record.student;
     const eligibility = record.eligibility;
     editor.innerHTML = `
@@ -101,7 +113,7 @@
           <label for="eligibility-year-level">Year level</label>
           <select id="eligibility-year-level" name="yearLevel">
             <option value="">Not set</option>
-            ${options(["First Year", "Second Year", "Third Year", "Fourth Year"], student.yearLevel)}
+            ${options(["1st Year", "2nd Year", "3rd Year", "4th Year"], canonicalYearLevel(student.yearLevel))}
           </select>
           <label for="eligibility-academic-status">Academic status</label>
           <select id="eligibility-academic-status" name="academicStatus">${options(academicStatuses, student.academicStatus)}</select>
@@ -109,28 +121,28 @@
         <section class="panel">
           <div class="toolbar"><h2>Required subjects and grades</h2><button class="button" type="button" data-add-row="subjects">Add subject</button></div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Subject</th><th>Enrollment requirement</th><th>Grade (0-100)</th><th>Grade status</th></tr></thead>
+            <thead><tr><th>Subject</th><th>Enrollment requirement</th><th>Grade (0-100)</th><th>Grade status</th><th></th></tr></thead>
             <tbody data-rows="subjects">${record.subjects.map(subjectRow).join("")}</tbody>
           </table></div>
         </section>
         <section class="panel">
           <div class="toolbar"><h2>Financial records</h2><button class="button" type="button" data-add-row="financial">Add record</button></div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Balance</th><th>Payment status</th><th>Description</th></tr></thead>
+            <thead><tr><th>Balance</th><th>Payment status</th><th>Description</th><th></th></tr></thead>
             <tbody data-rows="financialRecords">${record.financialRecords.map(financialRow).join("")}</tbody>
           </table></div>
         </section>
         <section class="panel">
           <div class="toolbar"><h2>Enrollment holds</h2><button class="button" type="button" data-add-row="holds">Add hold</button></div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Reason</th><th>Status</th></tr></thead>
+            <thead><tr><th>Reason</th><th>Status</th><th></th></tr></thead>
             <tbody data-rows="holds">${record.holds.map(holdRow).join("")}</tbody>
           </table></div>
         </section>
         <section class="panel">
           <div class="toolbar"><h2>Other enrollment requirements</h2><button class="button" type="button" data-add-row="requirements">Add requirement</button></div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Requirement</th><th>Status</th><th>Enrollment impact</th></tr></thead>
+            <thead><tr><th>Requirement</th><th>Status</th><th>Enrollment impact</th><th></th></tr></thead>
             <tbody data-rows="requirements">${record.requirements.map(requirementRow).join("")}</tbody>
           </table></div>
         </section>

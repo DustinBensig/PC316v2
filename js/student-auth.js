@@ -8,6 +8,11 @@
     event.preventDefault();
     message.textContent = '';
     const data = new FormData(form);
+    const password = data.get('password') || '';
+    if (password.length < 8 || password.length > 72 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      message.textContent = 'Password must be 8–72 characters with at least one letter and one number.';
+      return;
+    }
     if (data.get('password') !== data.get('confirmPassword')) {
       message.textContent = 'Passwords do not match.';
       return;

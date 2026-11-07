@@ -112,15 +112,21 @@ try {
         'reference_number' => $referenceNumber,
         'scheduled_at' => $originalScheduledAt,
     ];
-    try {
-        $emailSent = student_send_appointment_email($profile, $cancelledAppointment, 'cancelled');
-    } catch (Throwable $error) {
-        error_log('Enrollment appointment was cancelled but notification email failed: ' . $error->getMessage());
-        $emailSent = false;
+    $emailSent = false;
+    if (student_mail_is_configured()) {
+        try {
+            $emailSent = student_send_appointment_email($profile, $cancelledAppointment, 'cancelled');
+            $message = $emailSent
+                ? 'Enrollment appointment cancelled. A confirmation email was sent.'
+                : 'Enrollment appointment cancelled, but the confirmation email could not be sent. Please contact the registrar.';
+        } catch (Throwable $error) {
+            error_log('Enrollment appointment was cancelled but notification email failed: ' . $error->getMessage());
+            $emailSent = false;
+            $message = 'Enrollment appointment cancelled, but the confirmation email could not be sent. Please contact the registrar.';
+        }
+    } else {
+        $message = 'Enrollment appointment cancelled. Email notifications are not enabled.';
     }
-    $message = $emailSent
-        ? 'Enrollment appointment cancelled. A confirmation email was sent.'
-        : 'Enrollment appointment cancelled, but the confirmation email could not be sent. Please contact the registrar.';
     try {
         $notificationUpdate = $database->prepare(
             'UPDATE notifications

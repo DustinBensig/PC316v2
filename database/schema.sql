@@ -71,7 +71,7 @@ CREATE TABLE students (
   campus_id BIGINT UNSIGNED NOT NULL DEFAULT 1,
   student_status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
   department_id BIGINT UNSIGNED NOT NULL,
-  academic_status ENUM('applicant', 'active', 'inactive', 'graduated', 'dropped', 'suspended', 'enrolling', 'enrolled') NOT NULL DEFAULT 'applicant',
+  academic_status VARCHAR(50) NOT NULL DEFAULT 'Regular',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -303,6 +303,17 @@ CREATE TABLE system_settings (
   CONSTRAINT fk_system_settings_admin FOREIGN KEY (updated_by) REFERENCES admins (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE enrolled_student_registry (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_number VARCHAR(7) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  program VARCHAR(150) NOT NULL,
+  year_level VARCHAR(40) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_registry_student_number (student_number)
+) ENGINE=InnoDB;
+
 CREATE TABLE appointment_status (
   id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
   status_code VARCHAR(32) NOT NULL,
@@ -379,6 +390,7 @@ CREATE TABLE enrollment_records (
   CONSTRAINT fk_enrollment_registrar FOREIGN KEY (registrar_admin_id) REFERENCES admins (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- LEGACY TABLE: requirements is legacy and unused by the enrollment booking gate.
 CREATE TABLE requirements (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   department_id BIGINT UNSIGNED NOT NULL,
@@ -395,6 +407,7 @@ CREATE TABLE requirements (
   CONSTRAINT fk_requirements_department FOREIGN KEY (department_id) REFERENCES departments (id)
 ) ENGINE=InnoDB;
 
+-- LEGACY TABLE: clearance_records is legacy and unused by the enrollment booking gate.
 CREATE TABLE clearance_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   student_id BIGINT UNSIGNED NOT NULL,
@@ -415,6 +428,7 @@ CREATE TABLE clearance_records (
   CONSTRAINT fk_clearances_reviewer FOREIGN KEY (reviewed_by) REFERENCES admins (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- LEGACY TABLE: payments is legacy and unused by the enrollment booking gate.
 CREATE TABLE payments (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   student_id BIGINT UNSIGNED NOT NULL,
@@ -677,3 +691,8 @@ JOIN (
 -- then let a PHP worker send queued rows and update delivery_status/sent_at.
 -- Keep SMTP usernames/passwords in server-side environment or secret storage;
 -- do not store them in system_settings or expose them to the frontend.
+
+-- System settings defaults
+INSERT INTO system_settings (setting_key, setting_value)
+VALUES ('require_registry_match', 'false')
+ON DUPLICATE KEY UPDATE setting_key = VALUES(setting_key);

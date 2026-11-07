@@ -220,6 +220,8 @@ function admin_can_read_section(PDO $database, array $admin, string $section): b
             return admin_has_permission($database, $admin, 'students.update');
         case 'students':
             return admin_can_read_students($database, $admin);
+        case 'admins':
+            return admin_has_permission($database, $admin, 'admins.read') || admin_has_permission($database, $admin, 'admins.*');
         case 'enrollments':
             return admin_has_permission($database, $admin, 'enrollment_records.read');
         case 'clearances':
